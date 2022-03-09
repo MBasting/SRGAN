@@ -3,7 +3,7 @@ import torch.nn as nn
 import numpy as np
 import matplotlib.pyplot as plt
 
-
+from Discriminator import Discriminator
 from SRCNN import SRCNN
 
 
@@ -18,13 +18,22 @@ def try_gpu():
         device = torch.device('cpu')
     return device
 
-def train(model, img, device=try_gpu()):
+
+def train(model, img):
     print(img)
     y = model(img)
     print(y)
     pass
 
+
 if __name__ == '__main__':
-    img = x = torch.randn((1, 1, 50, 50), dtype=torch.float32)
+    device = try_gpu()
+    img = torch.randn((1, 1, 50, 50), dtype=torch.float32).to(device)
     model = SRCNN(1)
-    train(model, img)
+    disc = Discriminator(1)
+    model.to(device)
+    disc.to(device)
+    z = model(img)
+    y = disc(z)
+    print(y)
+

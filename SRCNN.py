@@ -1,6 +1,7 @@
 import torch.nn as nn
 
-class Residual_Block(nn.Module):
+
+class ResidualBlock(nn.Module):
     """
     Residual Block module containing:
         - Convolution layer
@@ -8,6 +9,7 @@ class Residual_Block(nn.Module):
         - Convolution Layer
         - Addition/ Residual connection
     """
+
     def __init__(self, in_channels, hidden_channels, kernel_size, padding):
         """
         Initialize Layer
@@ -17,8 +19,7 @@ class Residual_Block(nn.Module):
         :param kernel_size: Kernel size
         :param padding: Padding
         """
-        super(Residual_Block, self).__init__()
-
+        super(ResidualBlock, self).__init__()
 
         self.conv1 = nn.Conv2d(in_channels, hidden_channels[0], kernel_size, padding=padding)
         self.PReLU = nn.PReLU()
@@ -36,13 +37,15 @@ class Residual_Block(nn.Module):
         x = x + res
         return x
 
-class Upscale_Layer(nn.Module):
+
+class UpscaleLayer(nn.Module):
     """
     Upscale/ Upsample module containing:
         - Convolution Layer
         - Upsample/ Shuffle Layer
         - PreLU
     """
+
     def __init__(self, in_channels, hidden_channels, kernel_size, upscale_factor, padding):
         """
         Initialize Layer
@@ -52,7 +55,7 @@ class Upscale_Layer(nn.Module):
         :param upscale_factor: Factor of upsample
         :param padding: Padding
         """
-        super(Upscale_Layer, self).__init__()
+        super(UpscaleLayer, self).__init__()
 
         self.conv1 = nn.Conv2d(in_channels, hidden_channels, kernel_size=kernel_size, padding=padding)
         self.upscale = nn.PixelShuffle(upscale_factor)
@@ -68,12 +71,14 @@ class Upscale_Layer(nn.Module):
         x = self.PReLU(x)
         return x
 
+
 class SRCNN(nn.Module):
     """
     ## TODO: LINK TO PAPER
     SRCNN implementation
     """
-    def __init__(self, in_channels, hidden_channels = [64, 64, 64, 64, 256, 256, 1]):
+
+    def __init__(self, in_channels, hidden_channels=[64, 64, 64, 64, 256, 256, 1]):
         """
         Initialize SRCNN network with correct layers and dimensions
         :param in_channels: Size of the input image
@@ -83,13 +88,14 @@ class SRCNN(nn.Module):
 
         # TODO: Verify padding mode
         self.conv1 = nn.Conv2d(in_channels, hidden_channels[0], kernel_size=3, padding=1)
-        self.residual = Residual_Block(hidden_channels[0], [hidden_channels[1], hidden_channels[2]], kernel_size=3, padding=1)
+        self.residual = ResidualBlock(hidden_channels[0], [hidden_channels[1], hidden_channels[2]], kernel_size=3,
+                                      padding=1)
 
         self.conv2 = nn.Conv2d(hidden_channels[2], hidden_channels[3], kernel_size=3, padding=1)
 
         # Note that the output of the upscale layers are 2xheight and 2xwidth and hidden_channels/4 !
-        self.upscale_1 = Upscale_Layer(hidden_channels[3], hidden_channels[4], 3, 2, padding=1)
-        self.upscale_2 = Upscale_Layer(hidden_channels[3], hidden_channels[5], 3, 2, padding=1)
+        self.upscale_1 = UpscaleLayer(hidden_channels[3], hidden_channels[4], 3, 2, padding=1)
+        self.upscale_2 = UpscaleLayer(hidden_channels[3], hidden_channels[5], 3, 2, padding=1)
 
         self.conv3 = nn.Conv2d(hidden_channels[3], hidden_channels[6], kernel_size=1)
 
@@ -114,5 +120,3 @@ class SRCNN(nn.Module):
         x = self.conv3(x)
 
         return x
-
-
