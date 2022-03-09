@@ -5,6 +5,8 @@ import matplotlib.pyplot as plt
 
 from Discriminator import Discriminator
 from SRCNN import SRCNN
+from torchvision.models import vgg19
+
 
 
 def try_gpu():
@@ -37,3 +39,6 @@ if __name__ == '__main__':
     y = disc(z)
     print(y)
 
+    # VGG uses Coloured images originally so need to duplicate channels or something?
+    vgg_original = vgg19(pretrained=True)
+    vgg_cut = vgg_original.features
