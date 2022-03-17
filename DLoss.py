@@ -24,6 +24,18 @@ with tf.variable_scope('Discriminator_loss'):
 
 
 """
+import torch.nn
+input = torch.randn(4)
+y = torch.nn.Sigmoid(input)
 
-def DLoss():
-    
+YLabel = torch.tensor([1, 1, 0, 1])
+
+OutputDiscrim = torch.randn(4)
+
+def DLoss(YLabel, OutputDiscrim):
+    lossFunc = torch.nn.BCELoss(weight=None, size_average=None, reduce=None, reduction='sum')
+    Dloss = lossFunc(YLabel, OutputDiscrim)
+    return Dloss
+
+print(DLoss(YLabel, OutputDiscrim))
+
