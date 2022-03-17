@@ -6,9 +6,6 @@ The discriminator output is discretized(rounded) to classify an image as either 
 
 for training the images are labeled as real or fake: Yhr=1 Ysr=0.
 
-I do not know how to implement the DLoss function, in eq. 4 the BXEsr has a term that is always 0 namely Ysr. Therefor BXEsr=0
-The second problem is that both the BXEhr and BXEsr sum over N, yet there is no N behind the sum. I do not know what to sum over.
-
 implementation of the authors:
 
 with tf.variable_scope('Discriminator_loss'):
@@ -21,21 +18,23 @@ with tf.variable_scope('Discriminator_loss'):
                 d_loss = d_loss1 + d_loss2
             # here, fake is 0 if the discriminator is good.
             # the generator aims to raise the label values towards 1
-
-
 """
 import torch.nn
-input = torch.randn(4)
-y = torch.nn.Sigmoid(input)
 
-YLabel = torch.tensor([1, 1, 0, 1])
-
-OutputDiscrim = torch.randn(4)
+# test data for fucntion
+#YLabel = torch.tensor([1., 1., 0., 1.])
+#OutputDiscrim = torch.randn(4)
 
 def DLoss(YLabel, OutputDiscrim):
-    lossFunc = torch.nn.BCELoss(weight=None, size_average=None, reduce=None, reduction='sum')
+    """
+    Function that calculates the binary cross entropy loss according to eq. 5 of the paper.
+
+    YLabel: The groundtruth value for the images, either 1 or 0. 
+    OutputDiscrim: Value between 0 and 1 to classify the image.
+    """
+    lossFunc = torch.nn.BCELoss(weight=None, size_average=None, reduce=None, reduction='mean')
     Dloss = lossFunc(YLabel, OutputDiscrim)
     return Dloss
 
-print(DLoss(YLabel, OutputDiscrim))
-
+#loss = DLoss(YLabel, OutputDiscrim)
+#print(loss)
