@@ -12,6 +12,9 @@ from Discriminator import Discriminator
 from Load_dataset import RockDataset, show_rock_samples
 from SRCNN import SRCNN
 from torchvision.models import vgg19
+from DLoss import DLoss
+from SRCNN_Loss import L1loss, L2loss, PSNR
+from VGG19Loss import VGG19_Loss
 
 m_seed = 1  # or use random.randint(1, 10000) for random reed
 random.seed(m_seed)
@@ -115,17 +118,20 @@ if __name__ == '__main__':
     y = disc(z)
     print(y)
 
-    # VGG uses Coloured images originally so need to duplicate channels or something?
-    vgg_original = vgg19(pretrained=True)
-    vgg_cut = vgg_original.features[:-1] # Use all Layers before fully connected layer and before max pool layer
-    vgg_cut.to(device)
-
     train(model, disc, vgg_cut)
 
-    # PSNR metric (equation 3)
-
     # Loss functions:
-    l1_loss = nn.L1Loss()
+    l1_loss = L1loss(SR, HR)
+    l2_loss = L2loss(SR, HR)
+
+    # PSNR metric (equation 3)
+    # is a standard function in pytorch that can be attached to the network, 
+    # but the authors use I=2 which we cannot set using the pytorch way. 
+    # what do we want?
+    psnr = PSNR(l2_loss) # our implementation where I=2. 
+
+    vgg19_loss = VGG19_Loss(SR_image, HR_image)
+
     adv_loss = ...
 
-    Total_D_loss = nn.BCELoss()  # Still needs to be averaged over number of samples
+    Total_D_loss = DLoss(YLabel, OutputDiscrim)
