@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 import matplotlib.pyplot as plt
+from torch.cuda.amp import autocast
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
@@ -53,9 +54,11 @@ def train(gen, disc, vgg):
     # Configure Data Loaders
     mini_batch_size_test = 8 # These are higher resolution images and thus might not fit into batches of size 16!
     mini_batch_size_valid = 8
-    rock_data_loader_train = DataLoader(rock_s_4_train, batch_size=mini_batch_size, shuffle=True, num_workers=0, pin_memory=True)
+    rock_data_loader_train = DataLoader(rock_s_4_train, batch_size=mini_batch_size, shuffle=True, num_workers=4, pin_memory=True, drop_last=True)  # Number of workers needs some figgeting to increase speedup
     rock_data_loader_valid = DataLoader(rock_s_4_valid, batch_size=mini_batch_size_valid, shuffle=True, num_workers=0)
     rock_data_loader_test = DataLoader(rock_s_4_test, batch_size=mini_batch_size_test, shuffle=True, num_workers=0)
+
+    # torch.backends.cudnn.benchmark = True  # Could lead to some speedup later according to a blogpost
 
     # Training of SRCNN (Generator)
     for phase, epochs in enumerate([epochs_gen, epoch_both]):
@@ -76,15 +79,28 @@ def train(gen, disc, vgg):
                         break
 
                     # Training should take place here
-
+                    # with autocast():
+                    #     print("okay")
 
 
                     # Update progressbar and iteration var
                     iteration += 1
                     inner.update(1)
 
-            # Validation should take place here
+            with torch.no_grad(): # Since we are evaluating no gradients need to calculated -> speedup
+                inner = tqdm(total=len(rock_data_loader_valid), desc='Validation', position=1, leave=False)
+                for i_batch, sample_batch in enumerate(rock_data_loader_valid):
+                    inner.update(1)
+                    if (i_batch) > 10:
+                        break
+                    # # Validation should take place here
+                    # break
 
+    with torch.no_grad(): # No gradient calculation needed
+        inner = tqdm(total=len(rock_data_loader_test), desc='Testing', position=1, leave=False)
+        for t_batch in rock_data_loader_test:
+            # Any sort of testing should take place here
+            break
 
 
 
