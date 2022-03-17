@@ -29,7 +29,7 @@ def DLoss(YLabel, OutputDiscrim):
     """
     Function that calculates the binary cross entropy loss according to eq. 5 of the paper.
 
-    YLabel: The groundtruth value for the images, either 1 or 0. 
+    YLabel: The groundtruth value for the images, either 1.0 or 0.0.(must be floats) 
     OutputDiscrim: Value between 0 and 1 to classify the image.
     """
     lossFunc = torch.nn.BCELoss(weight=None, size_average=None, reduce=None, reduction='mean')
