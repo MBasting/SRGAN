@@ -9,18 +9,21 @@ from torchvision import utils
 import torchvision.transforms as T
 
 
-
+# Mostly adapted from https://pytorch.org/tutorials/beginner/data_loading_tutorial.html
 class RockDataset(Dataset):
     """ DeepRockSR-2D dataset."""
 
     def __init__(self, dir_LR, dir_HR, crop=None):
+        # Save directories of LR and HR images
         self.dir_LR = dir_LR
         self.dir_HR = dir_HR
 
+        # Get List of image for both HR and LR images in the same order
         self.image_list_LR = [name for name in os.listdir(self.dir_LR) if
                               os.path.isfile(os.path.join(self.dir_LR, name))]
         self.image_list_HR = [name.replace("x4", "") for name in self.image_list_LR]
 
+        # Crop flag
         self.crop = crop
 
     def __len__(self):
@@ -30,9 +33,9 @@ class RockDataset(Dataset):
         if torch.is_tensor(idx):
             idx = idx.tolist()
 
+        # Get the full path to the images and load
         img_name_LR = os.path.join(self.dir_LR, self.image_list_LR[idx])
         image_LR = io.imread(img_name_LR)
-
 
         img_name_HR = os.path.join(self.dir_HR, self.image_list_HR[idx])
         image_HR = io.imread(img_name_HR)
@@ -66,6 +69,12 @@ class RockDataset(Dataset):
 
 
 def show_rock_samples(sample_batch, nr_to_show=4):
+    """
+
+    :param sample_batch:
+    :param nr_to_show:
+    :return:
+    """
     image_LR_batch = sample_batch['LR']
     image_HR_batch = sample_batch['HR']
 

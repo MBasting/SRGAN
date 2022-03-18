@@ -118,20 +118,25 @@ if __name__ == '__main__':
     y = disc(z)
     print(y)
 
-    train(model, disc, vgg_cut)
+    # # VGG uses Coloured images originally so need to duplicate channels or something?
+    # vgg_original = vgg19(pretrained=True)
+    # vgg_cut = vgg_original.features[:-1] # Use all Layers before fully connected layer and before max pool layer
+    # vgg_cut.to(device)
 
-    # Loss functions:
-    l1_loss = L1loss(SR, HR)
-    l2_loss = L2loss(SR, HR)
+    train(model, disc, None)
 
-    # PSNR metric (equation 3)
-    # is a standard function in pytorch that can be attached to the network, 
-    # but the authors use I=2 which we cannot set using the pytorch way. 
-    # what do we want?
-    psnr = PSNR(l2_loss) # our implementation where I=2. 
-
-    vgg19_loss = VGG19_Loss(SR_image, HR_image)
-
-    adv_loss = ...
-
-    Total_D_loss = DLoss(YLabel, OutputDiscrim)
+    # # Loss functions:
+    # l1_loss = L1loss(SR, HR)
+    # l2_loss = L2loss(SR, HR)
+    #
+    # # PSNR metric (equation 3)
+    # # is a standard function in pytorch that can be attached to the network,
+    # # but the authors use I=2 which we cannot set using the pytorch way.
+    # # what do we want?
+    # psnr = PSNR(l2_loss) # our implementation where I=2.
+    #
+    # vgg19_loss = VGG19_Loss(SR_image, HR_image)
+    #
+    # adv_loss = ...
+    #
+    # Total_D_loss = DLoss(YLabel, OutputDiscrim)
