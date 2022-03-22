@@ -9,12 +9,12 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from Discriminator import Discriminator
-from Load_dataset import RockDataset, show_rock_samples
+import Load_dataset
+from Load_dataset import RockDataset, show_rock_samples, load_dataset
 from SRCNN import SRCNN
 from torchvision.models import vgg19
 from DLoss import DLoss
 from SRCNN_Loss import L1loss, L2loss, PSNR
-from VGG19Loss import VGG19_Loss
 
 m_seed = 1  # or use random.randint(1, 10000) for random reed
 random.seed(m_seed)
@@ -50,16 +50,16 @@ def train(gen, disc, vgg):
     epoch_both = 150
 
     # Load Dataset
-    rock_s_4_train = RockDataset("DeepRockSR-2D/shuffled2D/shuffled2D_train_LR_unknown_X4", "DeepRockSR-2D/shuffled2D/shuffled2D_train_HR", True)
-    rock_s_4_valid = RockDataset("DeepRockSR-2D/shuffled2D/shuffled2D_valid_LR_unknown_X4", "DeepRockSR-2D/shuffled2D/shuffled2D_valid_HR")
-    rock_s_4_test = RockDataset("DeepRockSR-2D/shuffled2D/shuffled2D_test_LR_unknown_X4", "DeepRockSR-2D/shuffled2D/shuffled2D_test_HR")
+    train, valid_carbonate, valid_coal, valid_sand, test = load_dataset()
 
     # Configure Data Loaders
     mini_batch_size_test = 8 # These are higher resolution images and thus might not fit into batches of size 16!
     mini_batch_size_valid = 8
-    rock_data_loader_train = DataLoader(rock_s_4_train, batch_size=mini_batch_size, shuffle=True, num_workers=4, pin_memory=True, drop_last=True)  # Number of workers needs some figgeting to increase speedup
-    rock_data_loader_valid = DataLoader(rock_s_4_valid, batch_size=mini_batch_size_valid, shuffle=True, num_workers=0)
-    rock_data_loader_test = DataLoader(rock_s_4_test, batch_size=mini_batch_size_test, shuffle=True, num_workers=0)
+    rd_loader_train = DataLoader(train, batch_size=mini_batch_size, shuffle=True, num_workers=8, pin_memory=True, drop_last=True)  # Number of workers needs some figgeting to increase speedup
+    rd_loader_valid_carbo = DataLoader(valid_carbonate, batch_size=mini_batch_size_valid, shuffle=True, num_workers=0)
+    rd_loader_valid_coal = DataLoader(valid_coal, batch_size=mini_batch_size_valid, shuffle=True, num_workers=0)
+    rd_loader_valid_sand = DataLoader(valid_sand, batch_size=mini_batch_size_valid, shuffle=True, num_workers=0)
+    rd_loader_test = DataLoader(test, batch_size=mini_batch_size_test, shuffle=True, num_workers=0)
 
     # torch.backends.cudnn.benchmark = True  # Could lead to some speedup later according to a blogpost
 
@@ -74,7 +74,7 @@ def train(gen, disc, vgg):
             iteration = 0
             stop = False
             while(not stop):
-                for i_batch, sample_batch in enumerate(rock_data_loader_train):
+                for i_batch, sample_batch in enumerate(rd_loader_train):
 
                     # Stop when number of iterations has been reached
                     if iteration >= nr_of_iterations:
@@ -91,17 +91,18 @@ def train(gen, disc, vgg):
                     inner.update(1)
 
             with torch.no_grad(): # Since we are evaluating no gradients need to calculated -> speedup
-                inner = tqdm(total=len(rock_data_loader_valid), desc='Validation', position=1, leave=False)
-                for i_batch, sample_batch in enumerate(rock_data_loader_valid):
-                    inner.update(1)
-                    if (i_batch) > 10:
-                        break
-                    # # Validation should take place here
-                    # break
+                inner = tqdm(total=3*len(rd_loader_valid_coal), desc='Validation', position=1, leave=False)
+                for valid_loader in [rd_loader_valid_carbo, rd_loader_valid_coal, rd_loader_valid_sand]:
+                    for i_batch, sample_batch in enumerate(valid_loader):
+                        inner.update(1)
+                        if (i_batch) > 10:
+                            break
+                        # # Validation should take place here
+                        # break
 
     with torch.no_grad(): # No gradient calculation needed
-        inner = tqdm(total=len(rock_data_loader_test), desc='Testing', position=1, leave=False)
-        for t_batch in rock_data_loader_test:
+        inner = tqdm(total=len(rd_loader_test), desc='Testing', position=1, leave=False)
+        for t_batch in rd_loader_test:
             # Any sort of testing should take place here
             break
 
