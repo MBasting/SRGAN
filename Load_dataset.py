@@ -62,8 +62,9 @@ class RockDataset(Dataset):
             image_HR = T.functional.crop(image_HR, *params_HR)
 
             # Convert back to tensor
-            image_LR = to_Tensor(image_LR)
-            image_HR = to_Tensor(image_HR)
+            image_LR = to_Tensor(image_LR)[0,:, :]
+            image_HR = to_Tensor(image_HR)[0,:, :]
+
 
         return {"LR": image_LR, "HR": image_HR}
 
@@ -88,19 +89,20 @@ def show_rock_samples(sample_batch, nr_to_show=4):
 
 def show_image(dataset, i):
     sample = dataset[i]
+    print(sample["LR"])
 
-    plt.imshow(sample["LR"])
+    plt.imshow(sample["LR"], cmap='gray')
     plt.show()
 
-    plt.imshow(sample["HR"])
+    plt.imshow(sample["HR"], cmap='gray')
     plt.show()
 
 
-def load_dataset():
 
-    rock_s_4_train = RockDataset("DeepRockSR-2D/shuffled2D/shuffled2D_train_LR_unknown_X4", "DeepRockSR-2D/shuffled2D/shuffled2D_train_HR", True)
-    rock_s_4_valid = RockDataset("DeepRockSR-2D/shuffled2D/shuffled2D_valid_LR_unknown_X4", "DeepRockSR-2D/shuffled2D/shuffled2D_valid_HR")
-    rock_s_4_test = RockDataset("DeepRockSR-2D/shuffled2D/shuffled2D_test_LR_unknown_X4", "DeepRockSR-2D/shuffled2D/shuffled2D_test_HR")
 
-    return rock_s_4_train, rock_s_4_valid, rock_s_4_test
+rock_s_4_train = RockDataset("DeepRockSR-2D/shuffled2D/shuffled2D_train_LR_unknown_X4", "DeepRockSR-2D/shuffled2D/shuffled2D_train_HR", True)
+rock_s_4_valid = RockDataset("DeepRockSR-2D/shuffled2D/shuffled2D_valid_LR_unknown_X4", "DeepRockSR-2D/shuffled2D/shuffled2D_valid_HR")
+rock_s_4_test = RockDataset("DeepRockSR-2D/shuffled2D/shuffled2D_test_LR_unknown_X4", "DeepRockSR-2D/shuffled2D/shuffled2D_test_HR")
 
+toPil = T.ToPILImage()
+show_image(rock_s_4_train, 1)
