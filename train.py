@@ -13,6 +13,7 @@ import Load_dataset
 from Load_dataset import RockDataset, show_rock_samples, load_dataset
 from SRCNN import SRCNN
 from torchvision.models import vgg19
+import torchvision.transforms as T
 from DLoss import DLoss
 
 m_seed = 1  # or use random.randint(1, 10000) for random reed
@@ -35,7 +36,7 @@ def try_gpu():
 def train(gen, disc, vgg, device):
     # Specify hyperparameters Generator (SRCNN)
     epochs_gen = 100
-    nr_of_iterations = 1000
+    nr_of_iterations = 100
     mini_batch_size = 16  # Size 192x192
     lr_generator = 1e-4
     alpha = 1e-5
@@ -74,8 +75,8 @@ def train(gen, disc, vgg, device):
     loss_discriminator_train = []
 
     # Load label used later for training discriminator
-    label_real = torch.full((mini_batch_size, 1), real_label, dtype=torch.float16, device=device)
-    label_fake = torch.full((mini_batch_size, 1), fake_label, dtype=torch.float16, device=device)
+    label_real = torch.full((mini_batch_size, 1), real_label, dtype=torch.float32, device=device)
+    label_fake = torch.full((mini_batch_size, 1), fake_label, dtype=torch.float32, device=device)
     label = torch.cat((label_real, label_fake))
 
     # Training of SRCNN (Generator)
@@ -103,9 +104,6 @@ def train(gen, disc, vgg, device):
                     input_LR = sample_batch["LR"].to(device)
                     target_HR = sample_batch["HR"].to(device)
 
-                    input_LR = input_LR.view(mini_batch_size, 1, input_LR.size(-1), input_LR.size(-1))
-                    target_HR = target_HR.view(mini_batch_size, 1, target_HR.size(-1), target_HR.size(-1))
-
                     # Stop when number of iterations has been reached
                     if iteration >= nr_of_iterations:
                         stop = True
@@ -124,9 +122,9 @@ def train(gen, disc, vgg, device):
 
                     # If we are in the second training phase we also need to train discriminator
                     if phase == 0:
+                        disc.train()
                         disc_input = torch.cat((target_HR.detach(), SR_image.detach()))
-                        with autocast():
-                            output_disc = disc(disc_input)
+                        output_disc = disc(disc_input)
                         # Calculate loss
                         loss_disc = criterion_disc(output_disc, label)
 
@@ -148,22 +146,28 @@ def train(gen, disc, vgg, device):
 
             # Keep track of generator loss and update progressbar
             loss_generator_train.append(loss_gen_epoch)
-            outer.set_postfix(loss=loss_gen_epoch.item())
+            if phase == 0:
+                outer.set_postfix(loss=loss_gen_epoch.item())
+            else:
+                outer.set_postfix(loss_gen=loss_gen_epoch.item(), loss_disc=loss_disc_epoch.item())
 
             if phase == 1:
                 loss_discriminator_train.append(loss_disc_epoch)
-            #
+
             # with torch.no_grad():  # Since we are evaluating no gradients need to calculated -> speedup
+            #     gen.eval()
+            #     disc.eval()
             #     inner = tqdm(total=3 * len(rd_loader_valid_coal), desc='Validation', position=1, leave=False)
             #     psnr_val = torch.zeros((3, len(rd_loader_valid_coal)))
-            #     for index, valid_loader in enumerate([rd_loader_valid_carbo, rd_loader_valid_coal, rd_loader_valid_sand]):
+            #     for index, valid_loader in enumerate(
+            #             [rd_loader_valid_carbo, rd_loader_valid_coal, rd_loader_valid_sand]):
             #
             #         for i_batch, sample_batch in enumerate(valid_loader):
-            #             psnr_val[index, i_batch] =
-            #             inner.update(1)
-            #             if (i_batch) > 10:
-            #                 break
-            #             # Validation should take place here
+            #             input_LR = sample_batch["LR"][0].to(device)
+            #             output_HR = gen(input_LR[None,])
+            #             toPil = T.ToPILImage()
+            #             plt.imshow(toPil(output_HR[0]), cmap="gray")
+            #             plt.show()
             #             break
 
     # with torch.no_grad():  # No gradient calculation needed

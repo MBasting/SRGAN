@@ -33,6 +33,10 @@ class RockDataset(Dataset):
         if torch.is_tensor(idx):
             idx = idx.tolist()
 
+        to_Tensor = T.ToTensor()
+        toPil = T.ToPILImage()
+        to_Gray = T.Grayscale(num_output_channels=1)
+
         # Get the full path to the images and load
         img_name_LR = os.path.join(self.dir_LR, self.image_list_LR[idx])
         image_LR = io.imread(img_name_LR)
@@ -40,16 +44,14 @@ class RockDataset(Dataset):
         img_name_HR = os.path.join(self.dir_HR, self.image_list_HR[idx])
         image_HR = io.imread(img_name_HR)
 
+        # Convert to grayScale
+        image_LR = to_Gray(toPil(image_LR))
+        image_HR = to_Gray(toPil(image_HR))
+
         if self.crop:
 
             # Transform operations
-            toPil = T.ToPILImage()
             t_random_crop = T.RandomCrop(48)
-            to_Tensor = T.ToTensor()
-
-            # To apply randomcropping tensor needs to be converted to PIL
-            image_LR = toPil(image_LR)
-            image_HR = toPil(image_HR)
 
             # Get random location parameters for Low Res image
             params = t_random_crop.get_params(image_LR, (48, 48))
@@ -61,11 +63,8 @@ class RockDataset(Dataset):
             image_LR = T.functional.crop(image_LR, *params)
             image_HR = T.functional.crop(image_HR, *params_HR)
 
-            # Convert back to tensor
-            image_LR = to_Tensor(image_LR)[0,:, :]
-            image_HR = to_Tensor(image_HR)[0,:, :]
-
-
+        image_LR = to_Tensor(image_LR)
+        image_HR = to_Tensor(image_HR)
         return {"LR": image_LR, "HR": image_HR}
 
 
@@ -96,6 +95,8 @@ def show_image(dataset, i):
 
     plt.imshow(sample["HR"], cmap='gray')
     plt.show()
+
+
 
 
 def load_dataset():

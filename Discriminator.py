@@ -16,13 +16,16 @@ class DiscriminatorBlock(nn.Module):
         x = self.lrelu(x)
         return x
 
-
 class Discriminator(nn.Module):
 
-    def __init__(self, in_channels, hidden_channels=[64, 64, 128, 128, 256, 256, 512, 512], stride=[1, 2, 1, 2, 1, 2, 1, 2], kernel_size=3, alpha=0.2):
+    def __init__(self, in_channels, hidden_channels=None, stride=None, kernel_size=3, alpha=0.2):
 
         super(Discriminator, self).__init__()
 
+        if stride is None:
+            stride = [1, 2, 1, 2, 1, 2, 1, 2]
+        if hidden_channels is None:
+            hidden_channels = [64, 64, 128, 128, 256, 256, 512, 512]
         self.conv1 = nn.Conv2d(in_channels, hidden_channels[0], kernel_size, stride[0])
         self.lrelu = nn.LeakyReLU(alpha)
 
@@ -35,6 +38,8 @@ class Discriminator(nn.Module):
         self.fc2 = nn.Linear(1024, 1)
 
         self.sigmoid = nn.Sigmoid()
+
+
 
     def forward(self, x):
         x = self.lrelu(self.conv1(x))
