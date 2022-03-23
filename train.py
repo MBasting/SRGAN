@@ -1,20 +1,13 @@
 import random
 
 import torch
-import torch.nn as nn
-import numpy as np
-import matplotlib.pyplot as plt
 from torch.cuda.amp import autocast
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from Discriminator import Discriminator
-import Load_dataset
-from Load_dataset import RockDataset, show_rock_samples, load_dataset
+from Load_dataset import load_dataset
 from SRCNN import SRCNN
-from torchvision.models import vgg19
-import torchvision.transforms as T
-from DLoss import DLoss
 
 m_seed = 1  # or use random.randint(1, 10000) for random reed
 random.seed(m_seed)
@@ -33,7 +26,29 @@ def try_gpu():
     return device
 
 
+def load_weights(gen, disc, gen_weight_path, disc_weight_path):
+    """
+    Loads the saved trained weights in the respective models
+    :param gen: Generator (SRCNN)
+    :param disc: Discriminator
+    :param gen_weight_path: Path to the weights of the Generator
+    :param disc_weight_path: Path to the weights of the Discriminator
+    :return:
+    """
+    gen.load_state_dict(torch.load(gen_weight_path))
+    disc.load_state_dict(torch.load(disc_weight_path))
+
+
 def train(gen, disc, vgg, device):
+    """
+    Contains all the code for the training procedure of SRGAN
+    :param gen: Model of the Generator (SRCNN)
+    :param disc: Model of the Discriminator
+    :param vgg: VGG19
+    :param device: Run on the CPU or GPU(CUDA)
+    :return:
+    """
+
     # Specify hyperparameters Generator (SRCNN)
     epochs_gen = 100
     nr_of_iterations = 100
@@ -70,7 +85,7 @@ def train(gen, disc, vgg, device):
     rd_loader_valid_sand = DataLoader(valid_sand, batch_size=mini_batch_size_valid, shuffle=True, num_workers=0)
     rd_loader_test = DataLoader(test, batch_size=mini_batch_size_test, shuffle=True, num_workers=0)
 
-    # torch.backends.cudnn.benchmark = True  # Could lead to some speedup later according to a blogpost
+    # Keep track of the Generator loss and Discriminator loss during epochs
     loss_generator_train = []
     loss_discriminator_train = []
 
@@ -81,7 +96,7 @@ def train(gen, disc, vgg, device):
 
     # Training of SRCNN (Generator)
     for phase, epochs in enumerate([epochs_gen, epoch_both]):
-        # When done with training save the weights of the Discriminator
+        # When done with training phase 1 save the weights of the Generator
         if phase == 1:
             torch.save(gen.state_dict(), 'model_weights_gen.pth')
 
@@ -93,6 +108,7 @@ def train(gen, disc, vgg, device):
 
             # Specify Inner progressbar which keeps track of training inside epoch
             inner = tqdm(total=nr_of_iterations, desc='Batch', position=1, leave=False)
+
             # Necessary because batch_size * len(data_loader) < nr_iterations
             # So we loop over the data another time
             iteration = 0
@@ -117,11 +133,11 @@ def train(gen, disc, vgg, device):
                     with autocast():
                         SR_image = gen(input_LR)
 
-                    # Calculate loss and backward step
+                    # Calculate loss
                     loss_gen = criterion_gen(SR_image, target_HR)
 
                     # If we are in the second training phase we also need to train discriminator
-                    if phase == 0:
+                    if phase == 1:
                         disc.train()
                         disc_input = torch.cat((target_HR.detach(), SR_image.detach()))
                         output_disc = disc(disc_input)
@@ -132,8 +148,10 @@ def train(gen, disc, vgg, device):
                         loss_disc.backward()
                         optimizer_disc.step()
 
+                        # Keep track of the loss value
                         loss_disc_epoch += loss_disc
 
+                    # Backward step generator
                     loss_gen.backward()
                     optimizer_gen.step()
                     # Keep track of average Loss
@@ -145,14 +163,14 @@ def train(gen, disc, vgg, device):
                     inner.set_postfix(loss=loss_gen.item())
 
             # Keep track of generator loss and update progressbar
-            loss_generator_train.append(loss_gen_epoch)
+            loss_avg_gen = loss_gen_epoch.item() / 1000
+            loss_generator_train.append(loss_avg_gen)
             if phase == 0:
-                outer.set_postfix(loss=loss_gen_epoch.item())
+                outer.set_postfix(loss=loss_avg_gen)
             else:
-                outer.set_postfix(loss_gen=loss_gen_epoch.item(), loss_disc=loss_disc_epoch.item())
-
-            if phase == 1:
-                loss_discriminator_train.append(loss_disc_epoch)
+                loss_disc_avg = loss_disc_epoch.item()/1000
+                loss_discriminator_train.append(loss_disc_avg)
+                outer.set_postfix(loss_gen=loss_avg_gen, loss_disc=loss_disc_avg)
 
             # with torch.no_grad():  # Since we are evaluating no gradients need to calculated -> speedup
             #     gen.eval()
@@ -176,19 +194,17 @@ def train(gen, disc, vgg, device):
     #         # Any sort of testing should take place here
     #         break
 
+    # Save the Model weights of both Generator and Discriminator
     torch.save(gen.state_dict(), 'model_weights_gen_2.pth')
     torch.save(disc.state_dict(), 'model_weights_gen_2.pth')
 
 
 if __name__ == '__main__':
     device = try_gpu()
-    img = torch.randn((16, 48, 48), dtype=torch.float32).to(device).view(16, 1, 48, 48)
     gen = SRCNN(1)
     disc = Discriminator(1)
     gen.to(device)
     disc.to(device)
-    z = gen(img)
-    y = disc(z)
 
     # # VGG uses Coloured images originally so need to duplicate channels or something?
     # vgg_original = vgg19(pretrained=True)
@@ -196,19 +212,3 @@ if __name__ == '__main__':
     # vgg_cut.to(device)
 
     train(gen, disc, None, device)
-
-    # # Loss functions:
-    # l1_loss = L1loss(SR, HR)
-    # l2_loss = L2loss(SR, HR)
-    #
-    # # PSNR metric (equation 3)
-    # # is a standard function in pytorch that can be attached to the network,
-    # # but the authors use I=2 which we cannot set using the pytorch way.
-    # # what do we want?
-    # psnr = PSNR(l2_loss) # our implementation where I=2.
-    #
-    # vgg19_loss = VGG19_Loss(SR_image, HR_image)
-    #
-    # adv_loss = ...
-    #
-    # Total_D_loss = DLoss(YLabel, OutputDiscrim)
