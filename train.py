@@ -5,6 +5,7 @@ from torch.cuda.amp import autocast
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
+import SRCNN_Loss
 from Discriminator import Discriminator
 from Load_dataset import load_dataset
 from SRCNN import SRCNN
@@ -88,6 +89,7 @@ def train(gen, disc, vgg, device):
     # Keep track of the Generator loss and Discriminator loss during epochs
     loss_generator_train = []
     loss_discriminator_train = []
+    psnr_values = []
 
     # Load label used later for training discriminator
     label_real = torch.full((mini_batch_size, 1), real_label, dtype=torch.float32, device=device)
@@ -105,6 +107,7 @@ def train(gen, disc, vgg, device):
 
             loss_gen_epoch = 0
             loss_disc_epoch = 0
+            psnr_epoch = 0
 
             # Specify Inner progressbar which keeps track of training inside epoch
             inner = tqdm(total=nr_of_iterations, desc='Batch', position=1, leave=False)
@@ -135,6 +138,8 @@ def train(gen, disc, vgg, device):
 
                     # Calculate loss
                     loss_gen = criterion_gen(SR_image, target_HR)
+                    l2_Loss = SRCNN_Loss.L2loss(SR_image,target_HR)
+                    psnr_single = SRCNN_Loss.PSNR(l2_Loss,2)
 
                     # If we are in the second training phase we also need to train discriminator
                     if phase == 1:
@@ -157,6 +162,9 @@ def train(gen, disc, vgg, device):
                     # Keep track of average Loss
                     loss_gen_epoch += loss_gen
 
+                    #keep track of average psnr
+                    psnr_epoch += psnr_single
+
                     # Update progressbar and iteration var
                     iteration += 1
                     inner.update(1)
@@ -165,6 +173,11 @@ def train(gen, disc, vgg, device):
             # Keep track of generator loss and update progressbar
             loss_avg_gen = loss_gen_epoch.item() / 1000
             loss_generator_train.append(loss_avg_gen)
+
+            # append average psnr loss
+            psnr_avg = psnr_epoch/1000
+            psnr_values.append(psnr_avg)
+
             if phase == 0:
                 outer.set_postfix(loss=loss_avg_gen)
             else:
