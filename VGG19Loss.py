@@ -54,7 +54,9 @@ def VGG19_Loss(SR_image, HR_image, vgg_cut):
         output = vgg_cut(input_batch)
     
     # calculate the loss
-    vggloss = L2loss(output[0,:,:,:], output[1,:,:,:]) # TODO: CHECK IF CALCULATION IS PERFORMED FOR WHOLE BATCH
+    # the first part of the batch are the sr images the secon part are the hr images. 
+    # the images are concatenated to be able to go through the vgg19 network at ones.
+    vggloss = L2loss(output[0:SRinput_tensor.size()[0],:,:,:], output[SRinput_tensor.size()[0]:input_batch.size()[0],:,:,:]) # 
     
     return vggloss
 
