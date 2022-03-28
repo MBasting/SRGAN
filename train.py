@@ -55,9 +55,8 @@ def train(gen, disc, vgg, device):
     """
 
     # Specify hyperparameters Generator (SRCNN)
-    epochs_gen = 100
-    nr_of_iterations = 1000 # TODO: USE different number of epochs instead
-    mini_batch_size = 4  # Size 192x192
+    epochs_gen = 166 # Since now we are not doing 1000 but 600 iterations per epoch
+    mini_batch_size = 16  # Size 192x192
     lr_generator = 1e-4
     alpha = 1e-5
     beta = 5e-3
@@ -75,7 +74,7 @@ def train(gen, disc, vgg, device):
     # Specify hyperparameters Discriminator
     lr_disc = 1e-4
     optimizer_disc = torch.optim.Adam(disc.parameters(), lr_disc)
-    epoch_both = 150
+    epoch_both = 250 # Since we are not doing 1000 but 600 iterations per epoch
 
     # Load Dataset
     train, valid_carbonate, valid_coal, valid_sand, test = load_dataset()
@@ -114,77 +113,66 @@ def train(gen, disc, vgg, device):
             psnr_epoch = 0
 
             # Specify Inner progressbar which keeps track of training inside epoch
-            inner = tqdm(total=nr_of_iterations, desc='Batch', position=1, leave=False)
+            inner = tqdm(total=600, desc='Batch', position=1, leave=False)
 
-            # Necessary because batch_size * len(data_loader) < nr_iterations
-            # So we loop over the data another time
-            iteration = 0
-            stop = False
-            while not stop:
-                for i_batch, sample_batch in enumerate(rd_loader_train):
-                    with torch.autograd.set_detect_anomaly(True):
-                        gen.train()
-                        input_LR = sample_batch["LR"].to(device)
-                        target_HR = sample_batch["HR"].to(device)
+            for i_batch, sample_batch in enumerate(rd_loader_train):
 
-                        # Stop when number of iterations has been reached
-                        if iteration >= nr_of_iterations:
-                            stop = True
-                            break
+                gen.train()
+                input_LR = sample_batch["LR"].to(device)
+                target_HR = sample_batch["HR"].to(device)
 
-                        # Zero the parameter gradients
-                        optimizer_gen.zero_grad()
-                        optimizer_disc.zero_grad()
+                # Zero the parameter gradients
+                optimizer_gen.zero_grad()
+                optimizer_disc.zero_grad()
 
-                        # Generate Super Resolution Image
-                        with autocast():
-                            SR_image = gen(input_LR)
+                # Generate Super Resolution Image
+                with autocast():
+                    SR_image = gen(input_LR)
 
-                        # Calculate loss
-                        l1_loss = L1_loss(SR_image, target_HR)
-                        g_loss = l1_loss
+                # Calculate loss
+                l1_loss = L1_loss(SR_image, target_HR)
+                g_loss = l1_loss
 
-                        l2_Loss = SRCNN_Loss.L2loss(SR_image,target_HR)
-                        psnr_single = SRCNN_Loss.PSNR(l2_Loss,2)
+                l2_Loss = SRCNN_Loss.L2loss(SR_image,target_HR)
+                psnr_single = SRCNN_Loss.PSNR(l2_Loss,2)
 
-                        # If we are in the second training phase we also need to train discriminator
-                        if phase == 1:
-                            disc.train()
-                            disc_input = torch.cat((target_HR.detach(), SR_image.detach()))
-                            output_disc = disc(disc_input) # Output discriminator (prob HR image)
+                # If we are in the second training phase we also need to train discriminator
+                if phase == 1:
+                    disc.train()
+                    disc_input = torch.cat((target_HR.detach(), SR_image.detach()))
+                    output_disc = disc(disc_input) # Output discriminator (prob HR image)
 
-                            # Calculate loss Discriminator
-                            loss_disc = criterion_disc(label, output_disc)
-                            inverse_label = torch.ones(output_disc.size(), device=device) - output_disc.detach()
+                    # Calculate loss Discriminator
+                    loss_disc = criterion_disc(label, output_disc)
+                    inverse_label = torch.ones(output_disc.size(), device=device) - output_disc.detach()
 
-                            # Calculate loss Generator
-                            adv_loss = ADVloss(inverse_label, device=device)
-                            vgg_loss = VGG19_Loss(SR_image, target_HR, vgg)
+                    # Calculate loss Generator
+                    adv_loss = ADVloss(inverse_label, device=device)
+                    vgg_loss = VGG19_Loss(SR_image, target_HR, vgg)
 
-                            # Backward and optimizer step
-                            loss_disc.backward()
-                            optimizer_disc.step()
+                    # Backward and optimizer step
+                    loss_disc.backward()
+                    optimizer_disc.step()
 
-                            # Keep track of the loss value
-                            loss_disc_epoch += loss_disc
+                    # Keep track of the loss value
+                    loss_disc_epoch += loss_disc
 
-                            g_loss +=  alpha * vgg_loss + beta * adv_loss
-                        # Backward step generator
-                        g_loss.backward()
-                        optimizer_gen.step()
-                        # Keep track of average Loss
-                        loss_gen_epoch += g_loss
+                    g_loss +=  alpha * vgg_loss + beta * adv_loss
+                # Backward step generator
+                g_loss.backward()
+                optimizer_gen.step()
+                # Keep track of average Loss
+                loss_gen_epoch += g_loss
 
-                        #keep track of average psnr
-                        psnr_epoch += psnr_single
+                #keep track of average psnr
+                psnr_epoch += psnr_single
 
-                        # Update progressbar and iteration var
-                        iteration += 1
-                        inner.update(1)
-                        inner.set_postfix(loss=g_loss.item())
+                # Update progressbar and iteration var
+                inner.update(1)
+                inner.set_postfix(loss=g_loss.item())
 
             # Keep track of generator loss and update progressbar
-            loss_avg_gen = loss_gen_epoch.item() / 1000
+            loss_avg_gen = loss_gen_epoch.item() / len(rd_loader_train)
             loss_generator_train.append(loss_avg_gen)
 
             # append average psnr loss
@@ -194,7 +182,7 @@ def train(gen, disc, vgg, device):
             if phase == 0:
                 outer.set_postfix(loss=loss_avg_gen)
             else:
-                loss_disc_avg = loss_disc_epoch.item()/1000
+                loss_disc_avg = loss_disc_epoch.item() / len(rd_loader_train)
                 loss_discriminator_train.append(loss_disc_avg)
                 outer.set_postfix(loss_gen=loss_avg_gen, loss_disc=loss_disc_avg)
 
