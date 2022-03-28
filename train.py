@@ -3,12 +3,16 @@ import random
 import torch
 from torch.cuda.amp import autocast
 from torch.utils.data import DataLoader
+from torchvision.models import vgg19
 from tqdm import tqdm
 
 import SRCNN_Loss
+from ADVloss import ADVloss
+from DLoss import DLoss
 from Discriminator import Discriminator
 from Load_dataset import load_dataset
 from SRCNN import SRCNN
+from VGG19Loss import VGG19_Loss
 
 m_seed = 1  # or use random.randint(1, 10000) for random reed
 random.seed(m_seed)
@@ -52,8 +56,8 @@ def train(gen, disc, vgg, device):
 
     # Specify hyperparameters Generator (SRCNN)
     epochs_gen = 100
-    nr_of_iterations = 100
-    mini_batch_size = 16  # Size 192x192
+    nr_of_iterations = 1000 # TODO: USE different number of epochs instead
+    mini_batch_size = 4  # Size 192x192
     lr_generator = 1e-4
     alpha = 1e-5
     beta = 5e-3
@@ -63,10 +67,10 @@ def train(gen, disc, vgg, device):
     fake_label = 0
 
     # TODO: Should be replaced by G_Loss
-    criterion_gen = torch.nn.L1Loss(size_average=None, reduce=None, reduction='mean')
+    L1_loss = torch.nn.L1Loss(size_average=None, reduce=None, reduction='mean')
 
     # TODO: Should be replaced by D_Loss
-    criterion_disc = torch.nn.BCELoss()
+    criterion_disc = DLoss
 
     # Specify hyperparameters Discriminator
     lr_disc = 1e-4
@@ -118,57 +122,66 @@ def train(gen, disc, vgg, device):
             stop = False
             while not stop:
                 for i_batch, sample_batch in enumerate(rd_loader_train):
+                    with torch.autograd.set_detect_anomaly(True):
+                        gen.train()
+                        input_LR = sample_batch["LR"].to(device)
+                        target_HR = sample_batch["HR"].to(device)
 
-                    gen.train()
-                    input_LR = sample_batch["LR"].to(device)
-                    target_HR = sample_batch["HR"].to(device)
+                        # Stop when number of iterations has been reached
+                        if iteration >= nr_of_iterations:
+                            stop = True
+                            break
 
-                    # Stop when number of iterations has been reached
-                    if iteration >= nr_of_iterations:
-                        stop = True
-                        break
+                        # Zero the parameter gradients
+                        optimizer_gen.zero_grad()
+                        optimizer_disc.zero_grad()
 
-                    # Zero the parameter gradients
-                    optimizer_gen.zero_grad()
-                    optimizer_disc.zero_grad()
+                        # Generate Super Resolution Image
+                        with autocast():
+                            SR_image = gen(input_LR)
 
-                    # Generate Super Resolution Image
-                    with autocast():
-                        SR_image = gen(input_LR)
-
-                    # Calculate loss
-                    loss_gen = criterion_gen(SR_image, target_HR)
-                    l2_Loss = SRCNN_Loss.L2loss(SR_image,target_HR)
-                    psnr_single = SRCNN_Loss.PSNR(l2_Loss,2)
-
-                    # If we are in the second training phase we also need to train discriminator
-                    if phase == 1:
-                        disc.train()
-                        disc_input = torch.cat((target_HR.detach(), SR_image.detach()))
-                        output_disc = disc(disc_input)
                         # Calculate loss
-                        loss_disc = criterion_disc(output_disc, label)
+                        l1_loss = L1_loss(SR_image, target_HR)
+                        g_loss = l1_loss
 
-                        # Backward and optimizer step
-                        loss_disc.backward()
-                        optimizer_disc.step()
+                        l2_Loss = SRCNN_Loss.L2loss(SR_image,target_HR)
+                        psnr_single = SRCNN_Loss.PSNR(l2_Loss,2)
 
-                        # Keep track of the loss value
-                        loss_disc_epoch += loss_disc
+                        # If we are in the second training phase we also need to train discriminator
+                        if phase == 1:
+                            disc.train()
+                            disc_input = torch.cat((target_HR.detach(), SR_image.detach()))
+                            output_disc = disc(disc_input) # Output discriminator (prob HR image)
 
-                    # Backward step generator
-                    loss_gen.backward()
-                    optimizer_gen.step()
-                    # Keep track of average Loss
-                    loss_gen_epoch += loss_gen
+                            # Calculate loss Discriminator
+                            loss_disc = criterion_disc(label, output_disc)
+                            inverse_label = torch.ones(output_disc.size(), device=device) - output_disc.detach()
 
-                    #keep track of average psnr
-                    psnr_epoch += psnr_single
+                            # Calculate loss Generator
+                            adv_loss = ADVloss(inverse_label, device=device)
+                            vgg_loss = VGG19_Loss(SR_image, target_HR, vgg)
 
-                    # Update progressbar and iteration var
-                    iteration += 1
-                    inner.update(1)
-                    inner.set_postfix(loss=loss_gen.item())
+                            # Backward and optimizer step
+                            loss_disc.backward()
+                            optimizer_disc.step()
+
+                            # Keep track of the loss value
+                            loss_disc_epoch += loss_disc
+
+                            g_loss +=  alpha * vgg_loss + beta * adv_loss
+                        # Backward step generator
+                        g_loss.backward()
+                        optimizer_gen.step()
+                        # Keep track of average Loss
+                        loss_gen_epoch += g_loss
+
+                        #keep track of average psnr
+                        psnr_epoch += psnr_single
+
+                        # Update progressbar and iteration var
+                        iteration += 1
+                        inner.update(1)
+                        inner.set_postfix(loss=g_loss.item())
 
             # Keep track of generator loss and update progressbar
             loss_avg_gen = loss_gen_epoch.item() / 1000
@@ -219,9 +232,10 @@ if __name__ == '__main__':
     gen.to(device)
     disc.to(device)
 
-    # # VGG uses Coloured images originally so need to duplicate channels or something?
-    # vgg_original = vgg19(pretrained=True)
-    # vgg_cut = vgg_original.features[:-1] # Use all Layers before fully connected layer and before max pool layer
-    # vgg_cut.to(device)
+    # create the vgg19 network
+    vgg_original = vgg19(pretrained=True)   # Load the pretrained network
+    vgg_cut = vgg_original.features[:-1]    # Use all Layers before fully connected layer and before max pool layer
+    device = try_gpu()
+    vgg_cut.to(device)
 
-    train(gen, disc, None, device)
+    train(gen, disc, vgg_cut, device)

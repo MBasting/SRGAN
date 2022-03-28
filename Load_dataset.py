@@ -44,9 +44,10 @@ class RockDataset(Dataset):
         img_name_HR = os.path.join(self.dir_HR, self.image_list_HR[idx])
         image_HR = io.imread(img_name_HR)
 
-        # Convert to grayScale
+        # # Convert to grayScale
         image_LR = to_Gray(toPil(image_LR))
         image_HR = to_Gray(toPil(image_HR))
+
 
         if self.crop:
 
