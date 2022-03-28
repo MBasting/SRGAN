@@ -30,8 +30,7 @@ def VGG19_Loss(SR_image, HR_image, vgg_cut):
     SR_image: The first input image
     HR_image: The second input image 
     """
-    # Required preporsessing for the vgg network see: https://pytorch.org/hub/pytorch_vision_vgg/
-
+    # Required preprocessing for the vgg network see: https://pytorch.org/hub/pytorch_vision_vgg/
     SR_image = torch.cat((SR_image, SR_image, SR_image), 1)
     HR_image = torch.cat((HR_image, HR_image, HR_image), 1)
 

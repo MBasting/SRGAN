@@ -65,10 +65,8 @@ def train(gen, disc, vgg, device):
     real_label = 1
     fake_label = 0
 
-    # TODO: Should be replaced by G_Loss
     L1_loss = torch.nn.L1Loss(size_average=None, reduce=None, reduction='mean')
 
-    # TODO: Should be replaced by D_Loss
     criterion_disc = DLoss
 
     # Specify hyperparameters Discriminator
@@ -130,8 +128,7 @@ def train(gen, disc, vgg, device):
                     SR_image = gen(input_LR)
 
                 # Calculate loss
-                l1_loss = L1_loss(SR_image, target_HR)
-                g_loss = l1_loss
+                g_loss = L1_loss(SR_image, target_HR)
 
                 l2_Loss = SRCNN_Loss.L2loss(SR_image,target_HR)
                 psnr_single = SRCNN_Loss.PSNR(l2_Loss,2)
@@ -157,6 +154,7 @@ def train(gen, disc, vgg, device):
                     # Keep track of the loss value
                     loss_disc_epoch += loss_disc
 
+                    # Update loss calculation
                     g_loss +=  alpha * vgg_loss + beta * adv_loss
                 # Backward step generator
                 g_loss.backward()
@@ -185,7 +183,7 @@ def train(gen, disc, vgg, device):
                 loss_disc_avg = loss_disc_epoch.item() / len(rd_loader_train)
                 loss_discriminator_train.append(loss_disc_avg)
                 outer.set_postfix(loss_gen=loss_avg_gen, loss_disc=loss_disc_avg)
-
+            # TODO: ADD validation/Test PSNR calculation
             # with torch.no_grad():  # Since we are evaluating no gradients need to calculated -> speedup
             #     gen.eval()
             #     disc.eval()
