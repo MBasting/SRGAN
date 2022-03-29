@@ -7,7 +7,7 @@ def bicubic_interpolation(image_LR, scale_factor):
     Input is tensor image with size [3, 125, 125], all three channels are identical, 
     interpolation is therefore only performed on one channel and consequently expanded
     to original three channels. 
-    Output image depands on scale factor (2x or 4x)
+    Output image depends on scale factor (2x or 4x)
     """
 
     image_LR = image_LR[0]
