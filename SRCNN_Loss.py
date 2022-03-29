@@ -60,11 +60,11 @@ def PSNR(L2loss, I=2):
 onderstaande functie kan nog van pas komen als de elementwise manier van de pytorch niet goed blijkt en we weer pixelwise willen
 
 def Lloss(SR, HR):
-    """
+   
     #Function to calculate the L1 and L2 loss as in equation 2 and 1 of the paper
     #SR: Square image of size [Nx, Ny, Nc] 
     #HR: Square image of size [Nx, Ny, Nc] 
-    """
+    
     
     diff = torch.sub(SR, HR)    #take difference elementwise
     

@@ -33,7 +33,7 @@ def DLoss(YLabel, OutputDiscrim):
     OutputDiscrim: Value between 0 and 1 to classify the image.
     """
     lossFunc = torch.nn.BCELoss(weight=None, size_average=None, reduce=None, reduction='mean')
-    Dloss = lossFunc(YLabel, OutputDiscrim)
+    Dloss = lossFunc(OutputDiscrim, YLabel)
     return Dloss
 
 #loss = DLoss(YLabel, OutputDiscrim)
