@@ -42,8 +42,10 @@ def load_weights(gen, disc, gen_weight_path, disc_weight_path):
     :param disc_weight_path: Path to the weights of the Discriminator
     :return:
     """
-    gen.load_state_dict(torch.load(gen_weight_path))
-    disc.load_state_dict(torch.load(disc_weight_path))
+    if gen_weight_path != "":
+        gen.load_state_dict(torch.load(gen_weight_path))
+    if disc_weight_path != "":
+        disc.load_state_dict(torch.load(disc_weight_path))
 
 
 def calculate_psnr(gen, rd_loader_valid_carbo, rd_loader_valid_coal, rd_loader_valid_sand, rock_s_4_test_carbonate, rock_s_4_test_coal, rock_s_4_test_sandstone, phase):
@@ -73,7 +75,7 @@ def calculate_psnr(gen, rd_loader_valid_carbo, rd_loader_valid_coal, rd_loader_v
             json.dump(psnr_total, fp, indent=4)
 
 
-def train(gen, disc, vgg, device):
+def train(gen, disc, vgg, device, load_from_file=False, weights_path_gen="", weights_path_disc=""):
     """
     Contains all the code for the training procedure of SRGAN
     :param gen: Model of the Generator (SRCNN)
@@ -129,6 +131,9 @@ def train(gen, disc, vgg, device):
     label_real = torch.full((mini_batch_size, 1), real_label, dtype=torch.float32, device=device)
     label_fake = torch.full((mini_batch_size, 1), fake_label, dtype=torch.float32, device=device)
     label = torch.cat((label_real, label_fake))
+
+    if load_from_file:
+        load_weights(gen, disc, weights_path_gen, weights_path_disc)
 
     # Training of SRCNN (Generator)
     for phase, epochs in enumerate([epochs_gen, epoch_both]):
