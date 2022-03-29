@@ -105,6 +105,11 @@ def load_dataset():
         rock_s_4_valid_carbonate = RockDataset("DeepRockSR-2D/carbonate2D/carbonate2D_valid_LR_unknown_X4", "DeepRockSR-2D/carbonate2D/carbonate2D_valid_HR")
         rock_s_4_valid_coal = RockDataset("DeepRockSR-2D/coal2D/coal2D_valid_LR_unknown_X4", "DeepRockSR-2D/coal2D/coal2D_valid_HR")
         rock_s_4_valid_sandstone = RockDataset("DeepRockSR-2D/sandstone2D/sandstone2D_valid_LR_unknown_X4", "DeepRockSR-2D/sandstone2D/sandstone2D_valid_HR")
-        rock_s_4_test = RockDataset("DeepRockSR-2D/shuffled2D/shuffled2D_test_LR_unknown_X4", "DeepRockSR-2D/shuffled2D/shuffled2D_test_HR")
+        rock_s_4_test_carbonate = RockDataset("DeepRockSR-2D/carbonate2D/carbonate2D_test_LR_unknown_X4",
+                                               "DeepRockSR-2D/carbonate2D/carbonate2D_test_HR")
+        rock_s_4_test_coal = RockDataset("DeepRockSR-2D/coal2D/coal2D_test_LR_unknown_X4",
+                                          "DeepRockSR-2D/coal2D/coal2D_test_HR")
+        rock_s_4_test_sandstone = RockDataset("DeepRockSR-2D/sandstone2D/sandstone2D_test_LR_unknown_X4",
+                                               "DeepRockSR-2D/sandstone2D/sandstone2D_test_HR")
 
-        return rock_s_4_train, rock_s_4_valid_carbonate, rock_s_4_valid_coal, rock_s_4_valid_sandstone, rock_s_4_test
+        return rock_s_4_train, rock_s_4_valid_carbonate, rock_s_4_valid_coal, rock_s_4_valid_sandstone, rock_s_4_test_carbonate, rock_s_4_test_coal, rock_s_4_test_sandstone

@@ -1,4 +1,6 @@
+import json
 import random
+import sys
 
 import torch
 from torch.cuda.amp import autocast
@@ -44,6 +46,33 @@ def load_weights(gen, disc, gen_weight_path, disc_weight_path):
     disc.load_state_dict(torch.load(disc_weight_path))
 
 
+def calculate_psnr(gen, rd_loader_valid_carbo, rd_loader_valid_coal, rd_loader_valid_sand, rock_s_4_test_carbonate, rock_s_4_test_coal, rock_s_4_test_sandstone, phase):
+    with torch.no_grad():  # Since we are evaluating no gradients need to calculated -> speedup
+        gen.eval()
+        disc.eval()
+        inner = tqdm(total=3 * len(rd_loader_valid_coal) + 3*len(rock_s_4_test_coal), desc='Validation', position=1, leave=False)
+        loaders = ["carbonate", "coal", "sandstone","carbonate_test", "coal_test", "sandstone_test"]
+        psnr_total = {"carbonate": [], "coal": [], "sandstone": []}
+        for index, valid_loader in enumerate(
+                [rd_loader_valid_carbo, rd_loader_valid_coal, rd_loader_valid_sand, rock_s_4_test_carbonate, rock_s_4_test_coal, rock_s_4_test_sandstone]):
+            psnr_loader = []
+
+            for i_batch, sample_batch in enumerate(valid_loader):
+                input_LR = sample_batch["LR"].to(device)
+                target_HR = sample_batch["HR"].to(device)
+
+                SR_image = gen(input_LR)
+                l2_Loss = SRCNN_Loss.L2loss(SR_image, target_HR)
+                psnr_single = SRCNN_Loss.PSNR(l2_Loss, 2)
+                psnr_loader.append(psnr_single)
+                inner.update(1)
+
+            loader = loaders[index%3]
+            psnr_total[loader].extend(psnr_loader)
+        with open('psnr_{}.json'.format(phase), 'w') as fp:
+            json.dump(psnr_total, fp, indent=4)
+
+
 def train(gen, disc, vgg, device):
     """
     Contains all the code for the training procedure of SRGAN
@@ -75,17 +104,21 @@ def train(gen, disc, vgg, device):
     epoch_both = 250 # Since we are not doing 1000 but 600 iterations per epoch
 
     # Load Dataset
-    train, valid_carbonate, valid_coal, valid_sand, test = load_dataset()
+    train, valid_carbonate, valid_coal, valid_sand, test_carbonate, test_coal, test_sand = load_dataset()
 
     # Configure Data Loaders
     mini_batch_size_test = 8  # These are higher resolution images and thus might not fit into batches of size 16!
-    mini_batch_size_valid = 8
+    mini_batch_size_valid = 1
+    mini_batch_size_test = 1
     rd_loader_train = DataLoader(train, batch_size=mini_batch_size, shuffle=True, num_workers=8, pin_memory=True,
                                  drop_last=True)  # Number of workers needs some figgeting to increase speedup
     rd_loader_valid_carbo = DataLoader(valid_carbonate, batch_size=mini_batch_size_valid, shuffle=True, num_workers=0)
     rd_loader_valid_coal = DataLoader(valid_coal, batch_size=mini_batch_size_valid, shuffle=True, num_workers=0)
     rd_loader_valid_sand = DataLoader(valid_sand, batch_size=mini_batch_size_valid, shuffle=True, num_workers=0)
-    rd_loader_test = DataLoader(test, batch_size=mini_batch_size_test, shuffle=True, num_workers=0)
+
+    rd_loader_test_carbo = DataLoader(test_carbonate, batch_size=mini_batch_size_test, shuffle=True, num_workers=0)
+    rd_loader_test_coal = DataLoader(test_coal, batch_size=mini_batch_size_test, shuffle=True, num_workers=0)
+    rd_loader_test_sand = DataLoader(test_sand, batch_size=mini_batch_size_test, shuffle=True, num_workers=0)
 
     # Keep track of the Generator loss and Discriminator loss during epochs
     loss_generator_train = []
@@ -102,6 +135,7 @@ def train(gen, disc, vgg, device):
         # When done with training phase 1 save the weights of the Generator
         if phase == 1:
             torch.save(gen.state_dict(), 'model_weights_gen.pth')
+            calculate_psnr(gen, rd_loader_valid_carbo, rd_loader_valid_coal, rd_loader_valid_sand, rd_loader_test_carbo, rd_loader_test_coal, rd_loader_test_sand, 0)
 
         outer = tqdm(range(epochs), position=0, desc='Epoch', leave=True)
         for epoch in outer:
@@ -178,27 +212,14 @@ def train(gen, disc, vgg, device):
             psnr_values.append(psnr_avg)
 
             if phase == 0:
-                outer.set_postfix(loss=loss_avg_gen)
+                outer.set_postfix(loss=loss_avg_gen, psnr=psnr_avg)
             else:
                 loss_disc_avg = loss_disc_epoch.item() / len(rd_loader_train)
                 loss_discriminator_train.append(loss_disc_avg)
-                outer.set_postfix(loss_gen=loss_avg_gen, loss_disc=loss_disc_avg)
-            # TODO: ADD validation/Test PSNR calculation
-            # with torch.no_grad():  # Since we are evaluating no gradients need to calculated -> speedup
-            #     gen.eval()
-            #     disc.eval()
-            #     inner = tqdm(total=3 * len(rd_loader_valid_coal), desc='Validation', position=1, leave=False)
-            #     psnr_val = torch.zeros((3, len(rd_loader_valid_coal)))
-            #     for index, valid_loader in enumerate(
-            #             [rd_loader_valid_carbo, rd_loader_valid_coal, rd_loader_valid_sand]):
-            #
-            #         for i_batch, sample_batch in enumerate(valid_loader):
-            #             input_LR = sample_batch["LR"][0].to(device)
-            #             output_HR = gen(input_LR[None,])
-            #             toPil = T.ToPILImage()
-            #             plt.imshow(toPil(output_HR[0]), cmap="gray")
-            #             plt.show()
-            #             break
+                outer.set_postfix(loss_gen=loss_avg_gen, loss_disc=loss_disc_avg, psnr=psnr_avg)
+
+    calculate_psnr(gen, rd_loader_valid_carbo, rd_loader_valid_coal, rd_loader_valid_sand, rd_loader_test_carbo,
+                   rd_loader_test_coal, rd_loader_test_sand, 1)
 
     # with torch.no_grad():  # No gradient calculation needed
     #     inner = tqdm(total=len(rd_loader_test), desc='Testing', position=1, leave=False)

@@ -1,3 +1,5 @@
+import json
+
 from Load_dataset import RockDataset
 import matplotlib.pyplot as plt
 import torchvision.transforms as T
@@ -18,23 +20,35 @@ coal_4_test = RockDataset("DeepRockSR-2D/coal2D/coal2D_test_LR_default_X4", "Dee
 valid_test_dict = {"sandstone_v": sandstone_4_valid, "sandstone_t": sandstone_4_test, "carbonate_v": carbonate_4_valid, "carbonate_t": carbonate_4_test, "coal_v": coal_4_valid, "coal_t": coal_4_test}
 
 # empty dictionaries which will be filled with psnr values for validation and test images combined
-sandstone_psnr = {"bicubic": [], "SRCNN": [24, 25, 26], "SRGAN": [24, 25, 26]}
-carbonate_psnr = {"bicubic": [], "SRCNN": [24, 25, 26], "SRGAN": [24, 25, 26]}
-coal_psnr = {"bicubic": [], "SRCNN": [24, 25, 26], "SRGAN": [24, 25, 26]}
+sandstone_psnr = {"bicubic": [], "SRCNN": [], "SRGAN": []}
+carbonate_psnr = {"bicubic": [], "SRCNN": [], "SRGAN": []}
+coal_psnr = {"bicubic": [], "SRCNN": [], "SRGAN": []}
+
+psnr_dict_SRCNN = {}
+psnr_dict_SRGAN = {}
+# Opening JSON file
+with open('psnr_0.json') as json_file:
+    psnr_dict_SRCNN = json.load(json_file)
+
+with open('psnr_1.json') as json_file:
+    psnr_dict_SRGAN = json.load(json_file)
+
+sandstone_psnr["SRCNN"] = psnr_dict_SRCNN["sandstone"]
+carbonate_psnr["SRCNN"] = psnr_dict_SRCNN["carbonate"]
+coal_psnr["SRCNN"] = psnr_dict_SRCNN["coal"]
+
+sandstone_psnr["SRGAN"] = psnr_dict_SRGAN["sandstone"]
+carbonate_psnr["SRGAN"] = psnr_dict_SRGAN["carbonate"]
+coal_psnr["SRGAN"] = psnr_dict_SRGAN["coal"]
 
 for key in valid_test_dict:
     dataset = valid_test_dict[key]
 
     for i, image in enumerate(dataset):
         image_LR = image["LR"]
-        image_LR = to_Tensor(image_LR)
         image_HR = image["HR"]
-        image_HR = to_Tensor(image_HR)
         image_SR_bicupic = bicubic_interpolation(image_LR, 4)
-        image_SR_SRCNN = [] # deze moeten door het model gaan om de SR images te verkrijgen 
-        image_SR_SRGAN = []
 
-        images_SR = {"bicubic": image_SR_bicupic, "SRCNN": image_SR_SRGAN, "SRGAN": image_SR_SRGAN}
         images_SR = {"bicubic": image_SR_bicupic}
 
         for image_SR_type in images_SR:
@@ -67,8 +81,8 @@ axs[2].set(ylabel="PSNR (dB)")
 axs[2].set_title("Coal Validation + Testing Images")
 
 fig.show()
-plt.show(block=False)
-input('press <ENTER> to continue') # ik weet niet anders krijg ik de plot niet te zien 
+plt.show()
+# input('press <ENTER> to continue') # ik weet niet anders krijg ik de plot niet te zien
 
 
 
