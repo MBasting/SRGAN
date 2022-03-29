@@ -42,21 +42,24 @@ def load_weights(gen, disc, gen_weight_path, disc_weight_path):
     :param disc_weight_path: Path to the weights of the Discriminator
     :return:
     """
-    if gen_weight_path != "":
+    if gen_weight_path is not None:
         gen.load_state_dict(torch.load(gen_weight_path))
-    if disc_weight_path != "":
+    if disc_weight_path is not None:
         disc.load_state_dict(torch.load(disc_weight_path))
 
 
-def calculate_psnr(gen, rd_loader_valid_carbo, rd_loader_valid_coal, rd_loader_valid_sand, rock_s_4_test_carbonate, rock_s_4_test_coal, rock_s_4_test_sandstone, phase):
+def calculate_psnr(gen, rd_loader_valid_carbo, rd_loader_valid_coal, rd_loader_valid_sand, rock_s_4_test_carbonate,
+                   rock_s_4_test_coal, rock_s_4_test_sandstone, phase):
     with torch.no_grad():  # Since we are evaluating no gradients need to calculated -> speedup
         gen.eval()
         disc.eval()
-        inner = tqdm(total=3 * len(rd_loader_valid_coal) + 3*len(rock_s_4_test_coal), desc='Validation', position=1, leave=False)
-        loaders = ["carbonate", "coal", "sandstone","carbonate_test", "coal_test", "sandstone_test"]
+        inner = tqdm(total=3 * len(rd_loader_valid_coal) + 3 * len(rock_s_4_test_coal), desc='Validation', position=1,
+                     leave=False)
+        loaders = ["carbonate", "coal", "sandstone", "carbonate_test", "coal_test", "sandstone_test"]
         psnr_total = {"carbonate": [], "coal": [], "sandstone": []}
         for index, valid_loader in enumerate(
-                [rd_loader_valid_carbo, rd_loader_valid_coal, rd_loader_valid_sand, rock_s_4_test_carbonate, rock_s_4_test_coal, rock_s_4_test_sandstone]):
+                [rd_loader_valid_carbo, rd_loader_valid_coal, rd_loader_valid_sand, rock_s_4_test_carbonate,
+                 rock_s_4_test_coal, rock_s_4_test_sandstone]):
             psnr_loader = []
 
             for i_batch, sample_batch in enumerate(valid_loader):
@@ -69,13 +72,13 @@ def calculate_psnr(gen, rd_loader_valid_carbo, rd_loader_valid_coal, rd_loader_v
                 psnr_loader.append(psnr_single)
                 inner.update(1)
 
-            loader = loaders[index%3]
+            loader = loaders[index % 3]
             psnr_total[loader].extend(psnr_loader)
         with open('psnr_{}.json'.format(phase), 'w') as fp:
             json.dump(psnr_total, fp, indent=4)
 
 
-def train(gen, disc, vgg, device, load_from_file=False, weights_path_gen="", weights_path_disc=""):
+def train(gen, disc, vgg, device, load_from_file=False, weights_path_gen=None, weights_path_disc=None):
     """
     Contains all the code for the training procedure of SRGAN
     :param gen: Model of the Generator (SRCNN)
@@ -86,7 +89,7 @@ def train(gen, disc, vgg, device, load_from_file=False, weights_path_gen="", wei
     """
 
     # Specify hyperparameters Generator (SRCNN)
-    epochs_gen = 166 # Since now we are not doing 1000 but 600 iterations per epoch
+    epochs_gen = 166  # Since now we are not doing 1000 but 600 iterations per epoch
     mini_batch_size = 16  # Size 192x192
     lr_generator = 1e-4
     alpha = 1e-5
@@ -103,7 +106,7 @@ def train(gen, disc, vgg, device, load_from_file=False, weights_path_gen="", wei
     # Specify hyperparameters Discriminator
     lr_disc = 1e-4
     optimizer_disc = torch.optim.Adam(disc.parameters(), lr_disc)
-    epoch_both = 250 # Since we are not doing 1000 but 600 iterations per epoch
+    epoch_both = 250  # Since we are not doing 1000 but 600 iterations per epoch
 
     # Load Dataset
     train, valid_carbonate, valid_coal, valid_sand, test_carbonate, test_coal, test_sand = load_dataset()
@@ -137,10 +140,18 @@ def train(gen, disc, vgg, device, load_from_file=False, weights_path_gen="", wei
 
     # Training of SRCNN (Generator)
     for phase, epochs in enumerate([epochs_gen, epoch_both]):
+        if phase == 0 and load_from_file and weights_path_gen is not None:
+            print("SKIP Phase 1")
+            continue
+        if load_from_file and weights_path_disc is not None:
+            print("SKIP Phase 2")
+            continue
         # When done with training phase 1 save the weights of the Generator
-        if phase == 1:
+        # But only save model when we are not loading the weights
+        if phase == 1 and weights_path_gen == "":
             torch.save(gen.state_dict(), 'model_weights_gen.pth')
-            calculate_psnr(gen, rd_loader_valid_carbo, rd_loader_valid_coal, rd_loader_valid_sand, rd_loader_test_carbo, rd_loader_test_coal, rd_loader_test_sand, 0)
+            calculate_psnr(gen, rd_loader_valid_carbo, rd_loader_valid_coal, rd_loader_valid_sand, rd_loader_test_carbo,
+                           rd_loader_test_coal, rd_loader_test_sand, 0)
 
         outer = tqdm(range(epochs), position=0, desc='Epoch', leave=True)
         for epoch in outer:
@@ -169,14 +180,14 @@ def train(gen, disc, vgg, device, load_from_file=False, weights_path_gen="", wei
                 # Calculate loss
                 g_loss = L1_loss(SR_image, target_HR)
 
-                l2_Loss = SRCNN_Loss.L2loss(SR_image,target_HR)
-                psnr_single = SRCNN_Loss.PSNR(l2_Loss,2)
+                l2_Loss = SRCNN_Loss.L2loss(SR_image, target_HR)
+                psnr_single = SRCNN_Loss.PSNR(l2_Loss, 2)
 
                 # If we are in the second training phase we also need to train discriminator
                 if phase == 1:
                     disc.train()
                     disc_input = torch.cat((target_HR.detach(), SR_image.detach()))
-                    output_disc = disc(disc_input) # Output discriminator (prob HR image)
+                    output_disc = disc(disc_input)  # Output discriminator (prob HR image)
 
                     # Calculate loss Discriminator
                     loss_disc = criterion_disc(label, output_disc)
@@ -194,26 +205,26 @@ def train(gen, disc, vgg, device, load_from_file=False, weights_path_gen="", wei
                     loss_disc_epoch += loss_disc
 
                     # Update loss calculation
-                    g_loss +=  alpha * vgg_loss + beta * adv_loss
+                    g_loss += alpha * vgg_loss + beta * adv_loss
                 # Backward step generator
                 g_loss.backward()
                 optimizer_gen.step()
                 # Keep track of average Loss
                 loss_gen_epoch += g_loss
 
-                #keep track of average psnr
+                # keep track of average psnr
                 psnr_epoch += psnr_single
 
                 # Update progressbar and iteration var
                 inner.update(1)
-                inner.set_postfix(loss=g_loss.item())
+                inner.set_postfix(loss=g_loss.item(), loss_l2=l2_Loss.item())
 
             # Keep track of generator loss and update progressbar
             loss_avg_gen = loss_gen_epoch.item() / len(rd_loader_train)
             loss_generator_train.append(loss_avg_gen)
 
             # append average psnr loss
-            psnr_avg = psnr_epoch/1000
+            psnr_avg = psnr_epoch / len(rd_loader_train)
             psnr_values.append(psnr_avg)
 
             if phase == 0:
@@ -245,9 +256,12 @@ if __name__ == '__main__':
     disc.to(device)
 
     # create the vgg19 network
-    vgg_original = vgg19(pretrained=True)   # Load the pretrained network
-    vgg_cut = vgg_original.features[:-1]    # Use all Layers before fully connected layer and before max pool layer
+    vgg_original = vgg19(pretrained=True)  # Load the pretrained network
+    vgg_cut = vgg_original.features[:-1]  # Use all Layers before fully connected layer and before max pool layer
     device = try_gpu()
     vgg_cut.to(device)
+
+    # Comment out if you want to only train from phase 2
+    # train(gen, disc, vgg_cut, device, True, "model_weights_gen.pth", None)
 
     train(gen, disc, vgg_cut, device)

@@ -126,3 +126,7 @@ dmypy.json
 
 .idea/
 /DeepRockSR-2D/
+
+*.pth
+
+*.json
