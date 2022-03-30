@@ -1,6 +1,7 @@
 import json
 import random
 import sys
+import time
 
 import torch
 from torch.cuda.amp import autocast
@@ -74,7 +75,7 @@ def calculate_psnr(gen, rd_loader_valid_carbo, rd_loader_valid_coal, rd_loader_v
 
             loader = loaders[index % 3]
             psnr_total[loader].extend(psnr_loader)
-        with open('psnr_{}.json'.format(phase), 'w') as fp:
+        with open('psnr_{}_{}.json'.format(phase, time.time()), 'w') as fp:
             json.dump(psnr_total, fp, indent=4)
 
 
@@ -149,7 +150,7 @@ def train(gen, disc, vgg, device, load_from_file=False, weights_path_gen=None, w
         # When done with training phase 1 save the weights of the Generator
         # But only save model when we are not loading the weights
         if phase == 1 and weights_path_gen == "":
-            torch.save(gen.state_dict(), 'model_weights_gen.pth')
+            torch.save(gen.state_dict(), 'weights/model_weights_gen_{}.pth'.format(time.time()))
             calculate_psnr(gen, rd_loader_valid_carbo, rd_loader_valid_coal, rd_loader_valid_sand, rd_loader_test_carbo,
                            rd_loader_test_coal, rd_loader_test_sand, 0)
 
@@ -217,7 +218,11 @@ def train(gen, disc, vgg, device, load_from_file=False, weights_path_gen=None, w
 
                 # Update progressbar and iteration var
                 inner.update(1)
-                inner.set_postfix(loss=g_loss.item(), loss_l2=l2_Loss.item())
+                if phase == 0:
+                    inner.set_postfix(loss=g_loss.item(), loss_l2=l2_Loss.item())
+                else:
+                    inner.set_postfix(loss=g_loss.item(), loss_l2=l2_Loss.item(), adv_loss=adv_loss.item(),vgg_loss=vgg_loss.item(), dloss=loss_disc.item(), )
+
 
             # Keep track of generator loss and update progressbar
             loss_avg_gen = loss_gen_epoch.item() / len(rd_loader_train)
@@ -237,15 +242,11 @@ def train(gen, disc, vgg, device, load_from_file=False, weights_path_gen=None, w
     calculate_psnr(gen, rd_loader_valid_carbo, rd_loader_valid_coal, rd_loader_valid_sand, rd_loader_test_carbo,
                    rd_loader_test_coal, rd_loader_test_sand, 1)
 
-    # with torch.no_grad():  # No gradient calculation needed
-    #     inner = tqdm(total=len(rd_loader_test), desc='Testing', position=1, leave=False)
-    #     for t_batch in rd_loader_test:
-    #         # Any sort of testing should take place here
-    #         break
 
     # Save the Model weights of both Generator and Discriminator
-    torch.save(gen.state_dict(), 'model_weights_gen_2.pth')
-    torch.save(disc.state_dict(), 'model_weights_gen_2.pth')
+    time_done = time.time()
+    torch.save(gen.state_dict(), 'weights/model_weights_gen_2_{}.pth'.format(time_done))
+    torch.save(disc.state_dict(), 'weights/model_weights_disc_2_{}.pth'.format(time_done))
 
 
 if __name__ == '__main__':
@@ -254,7 +255,6 @@ if __name__ == '__main__':
     disc = Discriminator(1)
     gen.to(device)
     disc.to(device)
-
     # create the vgg19 network
     vgg_original = vgg19(pretrained=True)  # Load the pretrained network
     vgg_cut = vgg_original.features[:-1]  # Use all Layers before fully connected layer and before max pool layer
@@ -262,6 +262,6 @@ if __name__ == '__main__':
     vgg_cut.to(device)
 
     # Comment out if you want to only train from phase 2
-    # train(gen, disc, vgg_cut, device, True, "model_weights_gen.pth", None)
+    # train(gen, disc, vgg_cut, device, True, "weights/model_weights_gen.pth", None)
 
     train(gen, disc, vgg_cut, device)
