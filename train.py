@@ -116,7 +116,7 @@ def train(gen, disc, vgg, device, load_from_file=False, weights_path_gen=None, w
     mini_batch_size_test = 8  # These are higher resolution images and thus might not fit into batches of size 16!
     mini_batch_size_valid = 1
     mini_batch_size_test = 1
-    rd_loader_train = DataLoader(train, batch_size=mini_batch_size, shuffle=True, num_workers=8, pin_memory=True,
+    rd_loader_train = DataLoader(train, batch_size=mini_batch_size, shuffle=True, num_workers=4, pin_memory=True,
                                  drop_last=True)  # Number of workers needs some figgeting to increase speedup
     rd_loader_valid_carbo = DataLoader(valid_carbonate, batch_size=mini_batch_size_valid, shuffle=True, num_workers=0)
     rd_loader_valid_coal = DataLoader(valid_coal, batch_size=mini_batch_size_valid, shuffle=True, num_workers=0)
@@ -149,7 +149,7 @@ def train(gen, disc, vgg, device, load_from_file=False, weights_path_gen=None, w
             continue
         # When done with training phase 1 save the weights of the Generator
         # But only save model when we are not loading the weights
-        if phase == 1 and weights_path_gen == "":
+        if phase == 1 and weights_path_gen is None:
             torch.save(gen.state_dict(), 'weights/model_weights_gen_{}.pth'.format(time.time()))
             calculate_psnr(gen, rd_loader_valid_carbo, rd_loader_valid_coal, rd_loader_valid_sand, rd_loader_test_carbo,
                            rd_loader_test_coal, rd_loader_test_sand, 0)
@@ -192,7 +192,10 @@ def train(gen, disc, vgg, device, load_from_file=False, weights_path_gen=None, w
 
                     # Calculate loss Discriminator
                     loss_disc = criterion_disc(label, output_disc)
-                    inverse_label = torch.ones(output_disc.size(), device=device) - output_disc.detach()
+
+                    # Only need the discriminator output of the SR images
+                    inverse_label = torch.ones(mini_batch_size, device=device) - output_disc.detach()[
+                                                                                 mini_batch_size:2 * mini_batch_size]
 
                     # Calculate loss Generator
                     adv_loss = ADVloss(inverse_label, device=device)
@@ -221,8 +224,8 @@ def train(gen, disc, vgg, device, load_from_file=False, weights_path_gen=None, w
                 if phase == 0:
                     inner.set_postfix(loss=g_loss.item(), loss_l2=l2_Loss.item())
                 else:
-                    inner.set_postfix(loss=g_loss.item(), loss_l2=l2_Loss.item(), adv_loss=adv_loss.item(),vgg_loss=vgg_loss.item(), dloss=loss_disc.item(), )
-
+                    inner.set_postfix(loss=g_loss.item(), loss_l2=l2_Loss.item(), adv_loss=adv_loss.item(),
+                                      vgg_loss=vgg_loss.item(), dloss=loss_disc.item(), )
 
             # Keep track of generator loss and update progressbar
             loss_avg_gen = loss_gen_epoch.item() / len(rd_loader_train)
@@ -241,7 +244,6 @@ def train(gen, disc, vgg, device, load_from_file=False, weights_path_gen=None, w
 
     calculate_psnr(gen, rd_loader_valid_carbo, rd_loader_valid_coal, rd_loader_valid_sand, rd_loader_test_carbo,
                    rd_loader_test_coal, rd_loader_test_sand, 1)
-
 
     # Save the Model weights of both Generator and Discriminator
     time_done = time.time()

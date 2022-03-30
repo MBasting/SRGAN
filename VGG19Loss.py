@@ -13,16 +13,6 @@ from torchvision.models import vgg19
 from PIL import Image
 from SRCNN_Loss import L2loss
 
-def try_gpu():
-    """
-    If GPU is available, return torch.device as cuda:0; else return torch.device
-    as cpu.
-    """
-    if torch.cuda.is_available():
-        device = torch.device('cuda:0')
-    else:
-        device = torch.device('cpu')
-    return device
 
 def VGG19_Loss(SR_image, HR_image, vgg_cut):
     """
