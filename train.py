@@ -76,10 +76,10 @@ def calculate_psnr(gen, rd_loader_valid_carbo, rd_loader_valid_coal, rd_loader_v
         with open('results/psnr_{}_{}.json'.format(phase, time.time()), 'w') as fp:
             json.dump(psnr_total, fp, indent=4)
 
-# Added Momentum, label_smoothing variables on suggestion from https://github.com/soumith/ganhacks
+# Added label_smoothing option and separate SR and HR batches on suggestion from https://github.com/soumith/ganhacks
 # More options were available but these were the simplest ones
 # Added since phase 1 training leads to mode collapse Discriminator!
-def train(gen, disc, vgg, device, load_from_file=False, weights_path_gen=None, weights_path_disc=None, label_smoothing=False, momentum=False):
+def train(gen, disc, vgg, device, load_from_file=False, weights_path_gen=None, weights_path_disc=None, label_smoothing=False):
     """
     Contains all the code for the training procedure of SRGAN
     :param gen: Model of the Generator (SRCNN)
@@ -135,12 +135,8 @@ def train(gen, disc, vgg, device, load_from_file=False, weights_path_gen=None, w
     # Training of SRCNN (Generator)
     for phase, epochs in enumerate([epochs_gen, epoch_both]):
         # Each phase reinitialize optimizer
-        if momentum:
-            optimizer_disc = torch.optim.Adam(disc.parameters(), lr_disc, momentum=0.9)
-            optimizer_gen = torch.optim.Adam(gen.parameters(), lr_generator, momentum=0.9)
-        else:
-            optimizer_disc = torch.optim.Adam(disc.parameters(), lr_disc)
-            optimizer_gen = torch.optim.Adam(gen.parameters(), lr_generator)
+        optimizer_disc = torch.optim.Adam(disc.parameters(), lr_disc)
+        optimizer_gen = torch.optim.Adam(gen.parameters(), lr_generator)
 
         if phase == 0 and load_from_file and weights_path_gen is not None:
             print("SKIP Phase 1")
@@ -197,7 +193,6 @@ def train(gen, disc, vgg, device, load_from_file=False, weights_path_gen=None, w
                     optimizer_disc.zero_grad()
 
                     # Training Super Resolution Images, training of SR and HR separate
-                    # also on advice of https://github.com/soumith/ganhacks
                     output_disc_SR = disc(SR_image.detach())  # Output discriminator (prob HR image)
 
                     # Calculate loss Discriminator
