@@ -17,9 +17,7 @@ from Load_dataset import load_dataset
 from SRCNN import SRCNN
 from VGG19Loss import VGG19_Loss
 
-m_seed = 1  # or use random.randint(1, 10000) for random reed
-random.seed(m_seed)
-torch.manual_seed(m_seed)
+
 
 
 def try_gpu():
@@ -75,11 +73,13 @@ def calculate_psnr(gen, rd_loader_valid_carbo, rd_loader_valid_coal, rd_loader_v
 
             loader = loaders[index % 3]
             psnr_total[loader].extend(psnr_loader)
-        with open('psnr_{}_{}.json'.format(phase, time.time()), 'w') as fp:
+        with open('results/psnr_{}_{}.json'.format(phase, time.time()), 'w') as fp:
             json.dump(psnr_total, fp, indent=4)
 
-
-def train(gen, disc, vgg, device, load_from_file=False, weights_path_gen=None, weights_path_disc=None):
+# Added Momentum, label_smoothing variables on suggestion from https://github.com/soumith/ganhacks
+# More options were available but these were the simplest ones
+# Added since phase 1 training leads to mode collapse Discriminator!
+def train(gen, disc, vgg, device, load_from_file=False, weights_path_gen=None, weights_path_disc=None, label_smoothing=False, momentum=False):
     """
     Contains all the code for the training procedure of SRGAN
     :param gen: Model of the Generator (SRCNN)
@@ -95,25 +95,23 @@ def train(gen, disc, vgg, device, load_from_file=False, weights_path_gen=None, w
     lr_generator = 1e-4
     alpha = 1e-5
     beta = 5e-3
-    optimizer_gen = torch.optim.Adam(gen.parameters(), lr_generator)
 
     real_label = 1
     fake_label = 0
 
     L1_loss = torch.nn.L1Loss(size_average=None, reduce=None, reduction='mean')
-
     criterion_disc = DLoss
 
     # Specify hyperparameters Discriminator
     lr_disc = 1e-4
-    optimizer_disc = torch.optim.Adam(disc.parameters(), lr_disc)
+
+
     epoch_both = 250  # Since we are not doing 1000 but 600 iterations per epoch
 
     # Load Dataset
     train, valid_carbonate, valid_coal, valid_sand, test_carbonate, test_coal, test_sand = load_dataset()
 
     # Configure Data Loaders
-    mini_batch_size_test = 8  # These are higher resolution images and thus might not fit into batches of size 16!
     mini_batch_size_valid = 1
     mini_batch_size_test = 1
     rd_loader_train = DataLoader(train, batch_size=mini_batch_size, shuffle=True, num_workers=4, pin_memory=True,
@@ -131,16 +129,19 @@ def train(gen, disc, vgg, device, load_from_file=False, weights_path_gen=None, w
     loss_discriminator_train = []
     psnr_values = []
 
-    # Load label used later for training discriminator
-    label_real = torch.full((mini_batch_size, 1), real_label, dtype=torch.float32, device=device)
-    label_fake = torch.full((mini_batch_size, 1), fake_label, dtype=torch.float32, device=device)
-    label = torch.cat((label_real, label_fake))
-
     if load_from_file:
         load_weights(gen, disc, weights_path_gen, weights_path_disc)
 
     # Training of SRCNN (Generator)
     for phase, epochs in enumerate([epochs_gen, epoch_both]):
+        # Each phase reinitialize optimizer
+        if momentum:
+            optimizer_disc = torch.optim.Adam(disc.parameters(), lr_disc, momentum=0.9)
+            optimizer_gen = torch.optim.Adam(gen.parameters(), lr_generator, momentum=0.9)
+        else:
+            optimizer_disc = torch.optim.Adam(disc.parameters(), lr_disc)
+            optimizer_gen = torch.optim.Adam(gen.parameters(), lr_generator)
+
         if phase == 0 and load_from_file and weights_path_gen is not None:
             print("SKIP Phase 1")
             continue
@@ -172,7 +173,6 @@ def train(gen, disc, vgg, device, load_from_file=False, weights_path_gen=None, w
 
                 # Zero the parameter gradients
                 optimizer_gen.zero_grad()
-                optimizer_disc.zero_grad()
 
                 # Generate Super Resolution Image
                 with autocast():
@@ -186,27 +186,46 @@ def train(gen, disc, vgg, device, load_from_file=False, weights_path_gen=None, w
 
                 # If we are in the second training phase we also need to train discriminator
                 if phase == 1:
+                    # Load label used later for training discriminator
+                    if label_smoothing:
+                        label_real = torch.FloatTensor(mini_batch_size, 1, device=device).uniform_(0.7, 1.0)
+                    else:
+                        label_real = torch.full((mini_batch_size, 1), real_label, dtype=torch.float32, device=device)
+                    label_fake = torch.full((mini_batch_size, 1), fake_label, dtype=torch.float32, device=device)
+
                     disc.train()
-                    disc_input = torch.cat((target_HR.detach(), SR_image.detach()))
-                    output_disc = disc(disc_input)  # Output discriminator (prob HR image)
+                    optimizer_disc.zero_grad()
+
+                    # Training Super Resolution Images, training of SR and HR separate
+                    # also on advice of https://github.com/soumith/ganhacks
+                    output_disc_SR = disc(SR_image.detach())  # Output discriminator (prob HR image)
 
                     # Calculate loss Discriminator
-                    loss_disc = criterion_disc(label, output_disc)
+                    loss_disc_SR = criterion_disc(label_fake, output_disc_SR)
 
-                    # Only need the discriminator output of the SR images
-                    inverse_label = torch.ones(mini_batch_size, device=device) - output_disc.detach()[
-                                                                                 mini_batch_size:2 * mini_batch_size]
-
-                    # Calculate loss Generator
-                    adv_loss = ADVloss(inverse_label, device=device)
-                    vgg_loss = VGG19_Loss(SR_image, target_HR, vgg)
+                    # Only need the discriminator output of the SR images and p(sr) which is 1 - p(hr)
+                    p_sr_fake = torch.ones(mini_batch_size, device=device) - loss_disc_SR
 
                     # Backward and optimizer step
-                    loss_disc.backward()
+                    loss_disc_SR.backward()
                     optimizer_disc.step()
 
+                    # Training on High Resolution Images
+                    optimizer_disc.zero_grad()
+                    output_disc_HR = disc(target_HR.detach())
+                    loss_disc_HR = criterion_disc(label_real, output_disc_HR)
+
+                    # Backward and optimizer step
+                    loss_disc_HR.backward()
+                    optimizer_disc.step()
+
+                    loss_disc = loss_disc_HR + loss_disc_SR
                     # Keep track of the loss value
                     loss_disc_epoch += loss_disc
+
+                    # Calculate loss Generator
+                    adv_loss = ADVloss(p_sr_fake, device=device)
+                    vgg_loss = VGG19_Loss(SR_image, target_HR, vgg)
 
                     # Update loss calculation
                     g_loss += alpha * vgg_loss + beta * adv_loss
@@ -225,7 +244,7 @@ def train(gen, disc, vgg, device, load_from_file=False, weights_path_gen=None, w
                     inner.set_postfix(loss=g_loss.item(), loss_l2=l2_Loss.item())
                 else:
                     inner.set_postfix(loss=g_loss.item(), loss_l2=l2_Loss.item(), adv_loss=adv_loss.item(),
-                                      vgg_loss=vgg_loss.item(), dloss=loss_disc.item(), )
+                                      vgg_loss=vgg_loss.item(), dloss=loss_disc.item())
 
             # Keep track of generator loss and update progressbar
             loss_avg_gen = loss_gen_epoch.item() / len(rd_loader_train)
@@ -252,6 +271,10 @@ def train(gen, disc, vgg, device, load_from_file=False, weights_path_gen=None, w
 
 
 if __name__ == '__main__':
+    m_seed = random.randint(1, 10000)
+    print(m_seed)
+    random.seed(m_seed)
+    torch.manual_seed(m_seed)
     device = try_gpu()
     gen = SRCNN(1)
     disc = Discriminator(1)
