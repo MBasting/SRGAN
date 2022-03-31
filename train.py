@@ -170,10 +170,8 @@ def train(gen, disc, vgg, device, load_from_file=False, weights_path_gen=None, w
                 # Zero the parameter gradients
                 optimizer_gen.zero_grad()
                 optimizer_disc.zero_grad()
-
-                with autocast():
-                    # Generate Super Resolution Image
-                    SR_image = gen(input_LR)
+                # Generate Super Resolution Image
+                SR_image = gen(input_LR)
 
                 # Calculate loss
                 g_loss = L1_loss(SR_image, target_HR)
@@ -190,16 +188,20 @@ def train(gen, disc, vgg, device, load_from_file=False, weights_path_gen=None, w
                     else:
                         label_real = torch.full((mini_batch_size, 1), real_label, dtype=torch.float32, device=device)
 
-                    with autocast():
-                        label_fake = torch.full((mini_batch_size, 1), fake_label, dtype=torch.half, device=device)
+                    label_fake = torch.full((mini_batch_size, 1), fake_label, dtype=torch.float32, device=device)
 
-                        # Training Super Resolution Images, training of SR and HR separate
-                        output_disc_SR = disc(SR_image.detach())  # Output discriminator (prob HR image)
+                    # Training Super Resolution Images, training of SR and HR separate
+                    output_disc_SR = disc(SR_image.detach())  # Output discriminator (prob HR image)
                     # Calculate loss Discriminator
                     loss_disc_SR = criterion_disc(label_fake, output_disc_SR)
 
                     # Only need the discriminator output of the SR images and p(sr) which is 1 - p(hr)
-                    p_sr_fake = torch.ones(1, mini_batch_size, device=device) - loss_disc_SR.detach()
+                    p_sr_fake = torch.ones(mini_batch_size, device=device) - output_disc_SR.detach()
+                    print(p_sr_fake)
+
+                    # Calculate loss Generator
+                    adv_loss = ADVloss(p_sr_fake, device=device)
+                    vgg_loss = VGG19_Loss(SR_image, target_HR, vgg)
 
                     # Backward and optimizer step
                     loss_disc_SR.backward()
@@ -207,6 +209,7 @@ def train(gen, disc, vgg, device, load_from_file=False, weights_path_gen=None, w
 
                     # Training on High Resolution Images
                     optimizer_disc.zero_grad()
+
                     output_disc_HR = disc(target_HR.detach())
                     loss_disc_HR = criterion_disc(label_real, output_disc_HR)
 
@@ -217,10 +220,6 @@ def train(gen, disc, vgg, device, load_from_file=False, weights_path_gen=None, w
                     loss_disc = loss_disc_HR + loss_disc_SR
                     # Keep track of the loss value
                     loss_disc_epoch += loss_disc
-
-                    # Calculate loss Generator
-                    adv_loss = ADVloss(p_sr_fake, device=device)
-                    vgg_loss = VGG19_Loss(SR_image, target_HR, vgg)
 
                     # Update loss calculation
                     g_loss += alpha * vgg_loss + beta * adv_loss
@@ -285,4 +284,4 @@ if __name__ == '__main__':
     # Comment out if you want to only train from phase 2
     # train(gen, disc, vgg_cut, device, True, "weights/model_weights_gen.pth", None)
 
-    train(gen, disc, vgg_cut, device, load_from_file=True, label_smoothing=True)
+    train(gen, disc, vgg_cut, device, label_smoothing=True)
