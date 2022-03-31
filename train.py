@@ -42,7 +42,6 @@ def load_weights(gen, disc, gen_weight_path, disc_weight_path):
     if gen_weight_path is not None:
         gen.load_state_dict(torch.load(gen_weight_path))
     if disc_weight_path is not None:
-        print("okay")
         disc.load_state_dict(torch.load(disc_weight_path))
 
 
@@ -129,6 +128,8 @@ def train(gen, disc, vgg, device, load_from_file=False, weights_path_gen=None, w
     loss_discriminator_train = []
     psnr_values = []
 
+    if load_from_file:
+        load_weights(gen, disc, weights_path_gen, weights_path_disc)
 
     # Training of SRCNN (Generator)
     for phase, epochs in enumerate([epochs_gen, epoch_both]):
@@ -136,7 +137,7 @@ def train(gen, disc, vgg, device, load_from_file=False, weights_path_gen=None, w
         optimizer_disc = torch.optim.Adam(disc.parameters(), lr_disc)
         optimizer_gen = torch.optim.Adam(gen.parameters(), lr_generator)
 
-        if phase == 0 and load_from_file:
+        if phase == 0 and load_from_file and weights_path_gen is not None:
             print("SKIP Phase 1")
             continue
         if load_from_file and weights_path_disc is not None:
@@ -144,7 +145,7 @@ def train(gen, disc, vgg, device, load_from_file=False, weights_path_gen=None, w
             continue
         # When done with training phase 1 save the weights of the Generator
         # But only save model when we are not loading the weights
-        if phase == 1 and weights_path_gen is not None:
+        if phase == 1 and weights_path_gen is None:
             torch.save(gen.state_dict(), 'weights/model_weights_gen_{}.pth'.format(time.time()))
             calculate_psnr(gen, rd_loader_valid_carbo, rd_loader_valid_coal, rd_loader_valid_sand, rd_loader_test_carbo,
                            rd_loader_test_coal, rd_loader_test_sand, 0)
@@ -197,7 +198,6 @@ def train(gen, disc, vgg, device, load_from_file=False, weights_path_gen=None, w
 
                     # Only need the discriminator output of the SR images and p(sr) which is 1 - p(hr)
                     p_sr_fake = torch.ones(mini_batch_size, device=device) - output_disc_SR.detach()
-                    print(p_sr_fake)
 
                     # Calculate loss Generator
                     adv_loss = ADVloss(p_sr_fake, device=device)
@@ -255,7 +255,6 @@ def train(gen, disc, vgg, device, load_from_file=False, weights_path_gen=None, w
                 loss_discriminator_train.append(loss_disc_avg)
                 outer.set_postfix(loss_gen=loss_avg_gen, loss_disc=loss_disc_avg, psnr=psnr_avg)
 
-    print("OKAY")
     calculate_psnr(gen, rd_loader_valid_carbo, rd_loader_valid_coal, rd_loader_valid_sand, rd_loader_test_carbo,
                    rd_loader_test_coal, rd_loader_test_sand, 1)
 
@@ -273,7 +272,6 @@ if __name__ == '__main__':
     device = try_gpu()
     gen = SRCNN(1)
     disc = Discriminator(1)
-    load_weights(gen, disc,  "weights\model_weights_gen_1648653725.3494701.pth", None)
     gen.to(device)
     disc.to(device)
     # create the vgg19 network
