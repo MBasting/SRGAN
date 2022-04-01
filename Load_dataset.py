@@ -21,6 +21,7 @@ class RockDataset(Dataset):
         # Get List of image for both HR and LR images in the same order
         self.image_list_LR = [name for name in os.listdir(self.dir_LR) if
                               os.path.isfile(os.path.join(self.dir_LR, name))]
+        self.image_list_LR.sort()
         self.image_list_HR = [name.replace("x4", "") for name in self.image_list_LR]
 
         # Crop flag

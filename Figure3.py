@@ -27,10 +27,10 @@ coal_psnr = {"bicubic": [], "SRCNN": [], "SRGAN": []}
 psnr_dict_SRCNN = {}
 psnr_dict_SRGAN = {}
 # Opening JSON file
-with open('psnr_0.json') as json_file:
+with open('results/psnr_0_1648742813.0668075.json') as json_file:
     psnr_dict_SRCNN = json.load(json_file)
 
-with open('psnr_1.json') as json_file:
+with open('results/psnr_1_1648763675.3855865.json') as json_file:
     psnr_dict_SRGAN = json.load(json_file)
 
 sandstone_psnr["SRCNN"] = psnr_dict_SRCNN["sandstone"]
@@ -67,15 +67,15 @@ for key in valid_test_dict:
 
 # create boxplots (Figure 3 in paper)
 fig, axs = plt.subplots(1,3, figsize=(15,5))
-axs[0].boxplot(sandstone_psnr.values())
+axs[0].boxplot(sandstone_psnr.values(), showfliers=False)
 axs[0].set_xticklabels(sandstone_psnr.keys())
 axs[0].set(ylabel="PSNR (dB)")
 axs[0].set_title("Sandstone Validation + Testing Images")
-axs[1].boxplot(carbonate_psnr.values())
+axs[1].boxplot(carbonate_psnr.values(), showfliers=False )
 axs[1].set_xticklabels(carbonate_psnr.keys())
 axs[1].set(ylabel="PSNR (dB)")
 axs[1].set_title("Carbonate Validation + Testing Images")
-axs[2].boxplot(coal_psnr.values())
+axs[2].boxplot(coal_psnr.values(), showfliers=False)
 axs[2].set_xticklabels(coal_psnr.keys())
 axs[2].set(ylabel="PSNR (dB)")
 axs[2].set_title("Coal Validation + Testing Images")
