@@ -1,10 +1,18 @@
-# Reproducing  Boosting Resolution and Recovering Texture of 2D and 3D Micro-CT Images with Deep Learning
+# Reproducing Boosting Resolution and Recovering Texture of 2D and 3D Micro-CT Images with Deep Learning
 
+## Introduction 
 
+In this blog we will describe our attempt and result in reproducing the following paper: Boosting Resolution and Recovering Texture of 2D and 3D Micro-CT Images with Deep Learning (Wang et al., 2019). In this paper the authors explain and showcase the Enhanced Deep Super Resolution Generative Adversarial Network (EDSRGAN) they designed. This model is designed to take low-resolution(LR) images and superresolve a high-resolution(HR) image from it. These images can than be used for image-based analysis techniques. The model the authors designed is able to handle 2D and 3D images, but for the scope if this project the choice was made to focus only on reproducing the 2D images.
 
-## Method
+As the code that was given with this paper uses a lot of old libraries and has a lot of old dependencies, running this model and training with it becomes quite hard. However the results in the paper are promising and we would like to see if these hold up. With this some of the papers results seem questionable such as the lower PSNR values in figure 3. 
 
-In order to load the rock data samples efficiently (from https://www.digitalrocksportal.org/projects/215), there is a need for an efficient Data Loader that can transfer the samples to the GPU in batches and Dataset class that holds the location to the images.  The Dataset additionally can apply transformation on the samples if needed, in our case this is Random Cropping on both the low resolution and high resolution data samples to 64 x 64 (LR) and 192 x 192 (HR) and converting the samples to 1 colour channel as all samples in the dataset are grey images represented by 3 identical colour channels. An important note here is that these crops are linked as the SRGAN should reproduce the HR images from LR images as best as possible using upscaling. The Torchvision transforms module has the `get_params` method that helps with that. 
+We recreated the network as described in the paper and trained it with the same data set that was used for the model within the paper. We then used these trained models to recreate the figures 2 and 3 from the paper to see how these compare.
+
+## Implementation
+
+### Loading the data
+
+In order to load the rock data samples efficiently (from [https://www.digitalrocksportal.org/projects/215](https://www.digitalrocksportal.org/projects/215)), there is a need for an efficient Data Loader that can transfer the samples to the GPU in batches and Dataset class that holds the location to the images.  The Dataset additionally can apply transformation on the samples if needed, in our case this is Random Cropping on both the low resolution and high resolution data samples to 64 x 64 (LR) and 192 x 192 (HR) and converting the samples to 1 colour channel as all samples in the dataset are grey images represented by 3 identical colour channels. An important note here is that these crops are linked as the SRGAN should reproduce the HR images from LR images as best as possible using upscaling. The Torchvision transforms module has the `get_params` method that helps with that. 
 
 ```python
 # Transform operations
@@ -22,6 +30,8 @@ image_HR = T.functional.crop(image_HR, *params_HR)
 ```
 
 Loading the corresponding LR and HR image can be done by removing "x4" from the LR filename, since the LR image and HR image have corresponding names.  A helpful resource in writing your own custom dataset and dataset loader can be found [here](https://pytorch.org/tutorials/beginner/data_loading_tutorial.html). 
+
+### Architecture
 
 The next step was to get the SRCNN - generator and Discriminator, represented by Figure 1 in the paper, working in PyTorch. This proved to be slightly more difficult than expected because it was unclear which exact module SubPixel Convolution represented in PyTorch, why an input size of 48 x 48 was used, which type of padding was used in the convolution layers, what the backward arrow from the first residual connection to the second convolution layers means, and how exactly we should read the diagram in general. A clearer representation of the Generator and Discriminator can be found below, printed using the torchsummary. We assume that the backward connection is actually a mistake as we couldn't find information on it or a similar use case where such an arrow is used. 
 
@@ -127,7 +137,7 @@ vgg_cut = vgg_original.features[:-1]  # Use all Layers before fully connected la
 
 This results in an additional 20,024,384 parameters. Summing these parameters does not result in the same number of parameters described in the paper, but we could not figure out what the reason of this discrepancy was. 
 
-
+### Training Procedure
 
 Before jumping in the explanation of the training loop, we briefly give a short explanation on the loss functions used. All loss functions can be found in `Losses.Py`. 
 
@@ -137,7 +147,7 @@ Before jumping in the explanation of the training loop, we briefly give a short 
 - Adversarial loss (ADVloss) => takes as input probability of discriminator that input image is a Superresolution image so $1-ouput$, and then again uses `nn.BCELoss(weight=None, size_average=None, reduce=None, reduction='mean')`
 - VGG19_Loss => Still needs some pre-processing before it can be run through the VGG19 model but uses  `nn.MSELoss(size_average=None, reduce=None, reduction='mean')` in the end. 
 
-
+The training procedure closely follows the paper representation as best as possible, but instead of running 1000 iterations per epoch, which equates to 16k samples even though the dataset is only 9.6k, the model is trained for 600 iterations per epoch and the number of epochs to train is lengthened to keep the number of total iterations the same. Thus the model is trained for 166 epochs in phase 1 and 250 epochs in phase 2 using the minibatch size of 16. 
 
 The training loop follows the following structure:
 
@@ -189,6 +199,25 @@ for i_batch, sample_batch in enumerate(loader):
 	inner.inner.set_postfix(g_loss=g_loss.item(), loss_l2=l2_Loss.item())
 ```
 
-
-
 It is important during phase 2 to detach the generated Super Resolution image otherwise it will be added to the computational graph of the Discriminator and be cleared when the backward pass is performed! The same holds for calculating p(SR) = 1 - p(HR) as p(SR) is used for the adversarial loss. 
+
+
+
+## Results
+
+
+
+## Discussion
+
+
+
+
+
+
+
+
+
+
+
+
+
