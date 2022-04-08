@@ -9,13 +9,12 @@ from torch.utils.data import DataLoader
 from torchvision.models import vgg19
 from tqdm import tqdm
 
-import SRCNN_Loss
-from ADVloss import ADVloss
-from DLoss import DLoss
 from Discriminator import Discriminator
 from Load_dataset import load_dataset
+from Losses import DLoss, ADVloss, VGG19_Loss, L2loss, PSNR
 from SRCNN import SRCNN
-from VGG19Loss import VGG19_Loss
+from torchsummary import summary
+
 
 
 def try_gpu():
@@ -64,8 +63,8 @@ def calculate_psnr(gen, rd_loader_valid_carbo, rd_loader_valid_coal, rd_loader_v
                 target_HR = sample_batch["HR"].to(device)
 
                 SR_image = gen(input_LR)
-                l2_Loss = SRCNN_Loss.L2loss(SR_image, target_HR)
-                psnr_single = SRCNN_Loss.PSNR(l2_Loss, 2)
+                l2_Loss = L2loss(SR_image, target_HR)
+                psnr_single = PSNR(l2_Loss, 2)
                 psnr_loader.append(psnr_single)
                 inner.update(1)
 
@@ -78,39 +77,40 @@ def calculate_psnr(gen, rd_loader_valid_carbo, rd_loader_valid_coal, rd_loader_v
 # Added label_smoothing option and separate SR and HR batches on suggestion from https://github.com/soumith/ganhacks
 # More options were available but these were the simplest ones
 # Added since phase 1 training leads to mode collapse Discriminator!
-def train(gen, disc, vgg, device, load_from_file=False, weights_path_gen=None, weights_path_disc=None,
-          label_smoothing=False):
+def train(gen, disc, vgg, device, load_from_file=False, weights_path_gen=None, weights_path_disc=None):
     """
     Contains all the code for the training procedure of SRGAN
     :param gen: Model of the Generator (SRCNN)
     :param disc: Model of the Discriminator
     :param vgg: VGG19
     :param device: Run on the CPU or GPU(CUDA)
+    :param load_from_file: Load pre-trained weights or not
+    :param weights_path_gen: Path to pre-trained generator weights
+    :param weights_path_disc: Path to pre-trained discriminator weights
     :return:
     """
 
     # Specify hyperparameters Generator (SRCNN)
     epochs_gen = 166  # Since now we are not doing 1000 but 600 iterations per epoch
-    mini_batch_size = 16  # Size 192x192
     lr_generator = 1e-4
     alpha = 1e-5
     beta = 5e-3
 
-    real_label = 1
-    fake_label = 0
 
     L1_loss = torch.nn.L1Loss(size_average=None, reduce=None, reduction='mean')
     criterion_disc = DLoss
 
     # Specify hyperparameters Discriminator
     lr_disc = 1e-4
-
+    fake_label = 0
+    real_label = 1
     epoch_both = 250  # Since we are not doing 1000 but 600 iterations per epoch
 
     # Load Dataset
     train, valid_carbonate, valid_coal, valid_sand, test_carbonate, test_coal, test_sand = load_dataset()
 
     # Configure Data Loaders
+    mini_batch_size = 16  # Size 192x192
     mini_batch_size_valid = 1
     mini_batch_size_test = 1
     rd_loader_train = DataLoader(train, batch_size=mini_batch_size, shuffle=True, num_workers=4, pin_memory=True,
@@ -136,7 +136,6 @@ def train(gen, disc, vgg, device, load_from_file=False, weights_path_gen=None, w
         # Each phase reinitialize optimizer
         optimizer_disc = torch.optim.Adam(disc.parameters(), lr_disc)
         optimizer_gen = torch.optim.Adam(gen.parameters(), lr_generator)
-
         if phase == 0 and load_from_file and weights_path_gen is not None:
             print("SKIP Phase 1")
             continue
@@ -177,18 +176,13 @@ def train(gen, disc, vgg, device, load_from_file=False, weights_path_gen=None, w
                 # Calculate loss
                 g_loss = L1_loss(SR_image, target_HR)
 
-                l2_Loss = SRCNN_Loss.L2loss(SR_image, target_HR)
-                psnr_single = SRCNN_Loss.PSNR(l2_Loss, 2)
+                l2_Loss = L2loss(SR_image, target_HR)
+                psnr_single = PSNR(l2_Loss, 2)
 
                 # If we are in the second training phase we also need to train discriminator
                 if phase == 1:
-                    # Load label used later for training discriminator
-                    if label_smoothing:
-                        label_real = (0.7 - 1) * torch.rand((mini_batch_size, 1), dtype=torch.float32,
-                                                            device=device) + 1
-                    else:
-                        label_real = torch.full((mini_batch_size, 1), real_label, dtype=torch.float32, device=device)
-
+                    # Create classification Tensors
+                    label_real = torch.full((mini_batch_size, 1), real_label, dtype=torch.float32, device=device)
                     label_fake = torch.full((mini_batch_size, 1), fake_label, dtype=torch.float32, device=device)
 
                     # Training Super Resolution Images, training of SR and HR separate
@@ -217,12 +211,13 @@ def train(gen, disc, vgg, device, load_from_file=False, weights_path_gen=None, w
                     loss_disc_HR.backward()
                     optimizer_disc.step()
 
-                    loss_disc = loss_disc_HR + loss_disc_SR
+                    loss_disc = (loss_disc_HR + loss_disc_SR) / 2
                     # Keep track of the loss value
                     loss_disc_epoch += loss_disc
 
                     # Update loss calculation
                     g_loss += alpha * vgg_loss + beta * adv_loss
+
                 # Backward step generator
                 g_loss.backward()
                 optimizer_gen.step()
@@ -266,14 +261,15 @@ def train(gen, disc, vgg, device, load_from_file=False, weights_path_gen=None, w
 
 if __name__ == '__main__':
     m_seed = random.randint(1, 10000)
-    print(m_seed)
     random.seed(m_seed)
     torch.manual_seed(m_seed)
     device = try_gpu()
     gen = SRCNN(1)
     disc = Discriminator(1)
+
     gen.to(device)
     disc.to(device)
+
     # create the vgg19 network
     vgg_original = vgg19(pretrained=True)  # Load the pretrained network
     vgg_cut = vgg_original.features[:-1]  # Use all Layers before fully connected layer and before max pool layer
@@ -282,4 +278,4 @@ if __name__ == '__main__':
     # Comment out if you want to only train from phase 2
     # train(gen, disc, vgg_cut, device, True, "weights/model_weights_gen.pth", None)
 
-    train(gen, disc, vgg_cut, device, label_smoothing=True)
+    train(gen, disc, vgg_cut, device, label_smoothing=False)

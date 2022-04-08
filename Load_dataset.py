@@ -18,10 +18,9 @@ class RockDataset(Dataset):
         self.dir_LR = dir_LR
         self.dir_HR = dir_HR
 
-        # Get List of image for both HR and LR images in the same order
+        # Get List of image for LR images
         self.image_list_LR = [name for name in os.listdir(self.dir_LR) if
                               os.path.isfile(os.path.join(self.dir_LR, name))]
-        self.image_list_HR = [name.replace("x4", "") for name in self.image_list_LR]
 
         # Crop flag
         self.crop = crop
@@ -37,11 +36,14 @@ class RockDataset(Dataset):
         toPil = T.ToPILImage()
         to_Gray = T.Grayscale(num_output_channels=1)
 
-        # Get the full path to the images and load
-        img_name_LR = os.path.join(self.dir_LR, self.image_list_LR[idx])
-        image_LR = io.imread(img_name_LR)
+        image_LR_name = self.image_list_LR[idx]
+        image_HR_name = image_LR_name.replace("x4", "")
 
-        img_name_HR = os.path.join(self.dir_HR, self.image_list_HR[idx])
+        # Get the full path to the images and load
+        img_name_LR = os.path.join(self.dir_LR, image_LR_name)
+        img_name_HR = os.path.join(self.dir_HR, image_HR_name)
+
+        image_LR = io.imread(img_name_LR)
         image_HR = io.imread(img_name_HR)
 
         # # Convert to grayScale
