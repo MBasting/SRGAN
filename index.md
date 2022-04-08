@@ -1,8 +1,8 @@
-# Blog 
+# Reproducing  Boosting Resolution and Recovering Texture of 2D and 3D Micro-CT Images with Deep Learning
 
 
 
-## Our method
+## Method
 
 In order to load the rock data samples efficiently (from https://www.digitalrocksportal.org/projects/215), there is a need for an efficient Data Loader that can transfer the samples to the GPU in batches and Dataset class that holds the location to the images.  The Dataset additionally can apply transformation on the samples if needed, in our case this is Random Cropping on both the low resolution and high resolution data samples to 64 x 64 (LR) and 192 x 192 (HR) and converting the samples to 1 colour channel as all samples in the dataset are grey images represented by 3 identical colour channels. An important note here is that these crops are linked as the SRGAN should reproduce the HR images from LR images as best as possible using upscaling. The Torchvision transforms module has the `get_params` method that helps with that. 
 
