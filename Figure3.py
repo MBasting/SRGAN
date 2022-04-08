@@ -53,7 +53,7 @@ for key in valid_test_dict:
     for i, image in enumerate(dataset):
         image_LR = image["LR"]
         image_HR = image["HR"]
-        image_SR_bicupic = bicubic_interpolation(image_LR, 4)
+        image_SR_bicupic = bicubic_interpolation(image_LR.view(1, 1, image_LR.shape[1], image_LR.shape[2]), 4)
 
         images_SR = {"bicubic": image_SR_bicupic}
 
