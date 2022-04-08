@@ -38,7 +38,9 @@ for key in valid_dict:
 
     image_LR = sample_batch["LR"][0]
     image_HR = sample_batch["HR"]
-    image_LR_2 = image_LR.view(1, 1, image_LR.shape[0], image_LR.shape[1])
+    image_SR_bicupic = bicubic_interpolation(image_LR, 4).view(len(image_LR), image_HR.size()[-1], image_HR.size()[-1])
+    image_SR_SRCNN = gen_1(image_LR).detach().view(len(image_LR), image_HR.size()[-1], image_HR.size()[-1])
+    image_SR_SRGAN = gen_2(image_LR).detach().view(len(image_LR), image_HR.size()[-1], image_HR.size()[-1])
 
     image_SR_bicupic = bicubic_interpolation(image_LR_2, 4)
     image_SR_SRCNN = gen_1(image_LR_2).detach().view(1, image_HR.size()[-1], image_HR.size()[-1])
