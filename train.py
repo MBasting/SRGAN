@@ -211,7 +211,7 @@ def train(gen, disc, vgg, device, load_from_file=False, weights_path_gen=None, w
                     loss_disc_HR.backward()
                     optimizer_disc.step()
 
-                    loss_disc = (loss_disc_HR + loss_disc_SR) / 2
+                    loss_disc = (loss_disc_HR + loss_disc_SR) # / 2 The dloss should just be added see eq. 5
                     # Keep track of the loss value
                     loss_disc_epoch += loss_disc
 
