@@ -35,7 +35,7 @@ Loading the corresponding LR and HR image can be done by removing "x4" from the 
 
 The next step was to get the SRCNN - generator and Discriminator, represented by the Figure below, working in PyTorch.
 
-<img src="image-20220413154427186.png" alt="image-20220413154427186" style="width:70%;" />
+<img align= center src="image-20220413154427186.png" alt="image-20220413154427186" style="width:90%;" />
 
 This proved to be slightly more difficult than expected because it was unclear which exact module SubPixel Convolution represented in PyTorch, why an input size of 48 x 48 was used, which type of padding was used in the convolution layers, what the backward arrow from the first residual connection to the second convolution layers means, and how exactly we should read the diagram in general. A clearer representation of the Generator and Discriminator can be found below, printed using the torchsummary. We assume that the backward connection is actually a mistake as we couldn't find information on it or a similar use case where such an arrow is used. 
 
