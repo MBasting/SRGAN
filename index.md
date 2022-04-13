@@ -12,7 +12,7 @@ We recreated the network as described in the paper and trained it with the same 
 
 ### Loading the data
 
-In order to load the rock data samples efficiently (from [https://www.digitalrocksportal.org/projects/215](https://www.digitalrocksportal.org/projects/215)), there is a need for an efficient Data Loader that can transfer the samples to the GPU in batches and Dataset class that holds the location to the images.  The Dataset additionally can apply transformation on the samples if needed, in our case this is Random Cropping on both the low resolution and high resolution data samples to 64 x 64 (LR) and 192 x 192 (HR) and converting the samples to 1 colour channel as all samples in the dataset are grey images represented by 3 identical colour channels. An important note here is that these crops are linked as the SRGAN should reproduce the HR images from LR images as best as possible using upscaling. The Torchvision transforms module has the `get_params` method that helps with that. 
+In order to load the rock data samples efficiently (from [https://www.digitalrocksportal.org/projects/215](https://www.digitalrocksportal.org/projects/215)), there is a need for an efficient Data Loader that can transfer the samples to the GPU in batches and Dataset class that holds the location to the images.  The Dataset additionally can apply transformation on the samples if needed, in our case this is Random Cropping on both the low resolution and high resolution data samples to 64 x 64 (LR) and 192 x 192 (HR) and converting the samples to 1 colour channel, as all samples in the dataset are grey images represented by 3 identical colour channels. This was not mentioned in the paper but added by us.  An important note here is that the crops of the LR images and HR images are linked as the SRGAN should reproduce the HR images from LR images as best as possible using upscaling. The Torchvision transforms module has the `get_params` method that helps with that. 
 
 ```python
 # Transform operations
@@ -33,7 +33,11 @@ Loading the corresponding LR and HR image can be done by removing "x4" from the 
 
 ### Architecture
 
-The next step was to get the SRCNN - generator and Discriminator, represented by Figure 1 in the paper, working in PyTorch. This proved to be slightly more difficult than expected because it was unclear which exact module SubPixel Convolution represented in PyTorch, why an input size of 48 x 48 was used, which type of padding was used in the convolution layers, what the backward arrow from the first residual connection to the second convolution layers means, and how exactly we should read the diagram in general. A clearer representation of the Generator and Discriminator can be found below, printed using the torchsummary. We assume that the backward connection is actually a mistake as we couldn't find information on it or a similar use case where such an arrow is used. 
+The next step was to get the SRCNN - generator and Discriminator, represented by the Figure below, working in PyTorch.
+
+<img src="image-20220413154427186.png" alt="image-20220413154427186" style="width:70%;" />
+
+This proved to be slightly more difficult than expected because it was unclear which exact module SubPixel Convolution represented in PyTorch, why an input size of 48 x 48 was used, which type of padding was used in the convolution layers, what the backward arrow from the first residual connection to the second convolution layers means, and how exactly we should read the diagram in general. A clearer representation of the Generator and Discriminator can be found below, printed using the torchsummary. We assume that the backward connection is actually a mistake as we couldn't find information on it or a similar use case where such an arrow is used. 
 
 ```
 SRGAN - Generator
@@ -144,62 +148,152 @@ Before jumping in the explanation of the training loop, we briefly give a short 
 - Discriminator Loss => `nn.BCELoss(weight=None, size_average=None, reduce=None, reduction='mean')`
 - L1loss => `nn.L1Loss(size_average=None, reduce=None, reduction='mean')`
 - L2loss => `nn.MSELoss(size_average=None, reduce=None, reduction='mean')`
-- Adversarial loss (ADVloss) => takes as input probability of discriminator that input image is a Superresolution image so $1-ouput$, and then again uses `nn.BCELoss(weight=None, size_average=None, reduce=None, reduction='mean')`
+- Adversarial loss (ADVloss) => takes as input probability of discriminator that input image is a Superresolution image so 1-ouput, and then again uses `nn.BCELoss(weight=None, size_average=None, reduce=None, reduction='mean')`
 - VGG19_Loss => Still needs some pre-processing before it can be run through the VGG19 model but uses  `nn.MSELoss(size_average=None, reduce=None, reduction='mean')` in the end. 
 
-The training procedure closely follows the paper representation as best as possible, but instead of running 1000 iterations per epoch, which equates to 16k samples even though the dataset is only 9.6k, the model is trained for 600 iterations per epoch and the number of epochs to train is lengthened to keep the number of total iterations the same. Thus the model is trained for 166 epochs in phase 1 and 250 epochs in phase 2 using the minibatch size of 16. 
+The training procedure closely follows the paper representation as best as possible, but instead of running 1000 iterations per epoch the model is trained for 600 iterations per epoch and the number of epochs is increases to 166 epochs in phase 1 and 250 epochs in phase 2. This was done because 1000 iterations of training with a batch size of 16 equates to 16k samples, however the number of samples in the dataset is only 9.6k. By extending the number of epochs and reducing the number of iterations per epoch we loop through the entire dataset each epoch and the total number of samples stays the same. 
 
 The training loop follows the following structure:
 
-```
-for each phase in phases:
-	Initialize generator optimizer
-	Initialize discriminator optimizer
-	Check to skip phase 1 //(if we use pretrained generator weights from previous training)
-	Check to skip phase 2 //(if we use pretrained generator and discriminator weights from previous training)
-	If phase = 2 : Save Model weights of trained generator and compute PSNR on validation and test set
-	for each epoch:
+```python
+# Training of SRCNN (Generator)
+for phase, epochs in enumerate([epochs_gen, epoch_both]):
+    # Each phase reinitialize optimizer
+    optimizer_disc = torch.optim.Adam(disc.parameters(), lr_disc)
+    optimizer_gen = torch.optim.Adam(gen.parameters(), lr_generator)
+
+    # Skip phase 1 if the load_from_file flag is activated and weight path of generator is available
+    if phase == 0 and load_from_file and weights_path_gen is not None:
+        print("SKIP Phase 1")
+        continue
+    # Skip phase 2 if the load_from_file flag is activated and wieght path of discriminator is available
+    if load_from_file and weights_path_disc is not None:
+        print("SKIP Phase 2")
+        continue
+
+    # TQDM allows us to keep track of the training
+    outer = tqdm(range(epochs), position=0, desc='Epoch', leave=True)
+    for epoch in outer:
+
+        # Initialize average loss values
+        loss_gen_epoch = 0
+        loss_disc_epoch = 0
+        psnr_epoch = 0
+
+        # Specify Inner progressbar which keeps track of training inside epoch
+        inner = tqdm(total=600, desc='Batch', position=1, leave=False)
+
+        # Loop through dataset with DataLoader
+        for i_batch, sample_batch in enumerate(rd_loader_train):
+
+            # Specify generator and discriminator mode (other mode would be eval())
+            gen.train()
+            disc.train()
+
+            # Transfer image to GPU
+            input_LR = sample_batch["LR"].to(device)
+            target_HR = sample_batch["HR"].to(device)
+
+            # Zero the parameter gradients
+            optimizer_gen.zero_grad()
+            optimizer_disc.zero_grad()
+
+            # Generate Super Resolution Image
+            SR_image = gen(input_LR)
+
+            # Calculate loss
+            g_loss = L1_loss(SR_image, target_HR)
+            l2_Loss = L2loss(SR_image, target_HR)
+            # Calculate Training PSNR
+            psnr_single = PSNR(l2_Loss, 2)
+
+            # If we are in the second training phase we also need to train discriminator
+            if phase == 1:
+                # Create classification Tensors
+                label_real = torch.full((mini_batch_size, 1), real_label, dtype=torch.float32, device=device)
+                label_fake = torch.full((mini_batch_size, 1), fake_label, dtype=torch.float32, device=device)
+
+                # Training Super Resolution Images, training of SR and HR separate
+                output_disc_SR = disc(SR_image.detach())  # Output discriminator (prob HR image)
+                # Calculate loss Discriminator
+                loss_disc_SR = criterion_disc(label_fake, output_disc_SR)
+
+                # Only need the discriminator output of the SR images and p(sr) which is 1 - p(hr)
+                p_sr_fake = torch.ones(mini_batch_size, device=device) - output_disc_SR.detach()
+
+                # Calculate loss Generator
+                adv_loss = ADVloss(p_sr_fake, device=device)
+                vgg_loss = VGG19_Loss(SR_image, target_HR, vgg)
+
+                # Backward and optimizer step
+                loss_disc_SR.backward()
+                optimizer_disc.step()
+
+                # Training on High Resolution Images
+                optimizer_disc.zero_grad()
+
+                output_disc_HR = disc(target_HR.detach())
+                loss_disc_HR = criterion_disc(label_real, output_disc_HR)
+
+                # Backward and optimizer step
+                loss_disc_HR.backward()
+                optimizer_disc.step()
+
+                loss_disc = (loss_disc_HR + loss_disc_SR)
+                # Keep track of the loss value
+                loss_disc_epoch += loss_disc
+
+                # Update loss calculation
+                g_loss += alpha * vgg_loss + beta * adv_loss
+
+            # Backward step generator
+            g_loss.backward()
+            optimizer_gen.step()
+            # Keep track of average Loss
+            loss_gen_epoch += g_loss
+
+            # keep track of average psnr
+            psnr_epoch += psnr_single
+
+            # Update progressbar and iteration var
+            inner.update(1)
+            if phase == 0:
+                inner.set_postfix(loss=g_loss.item(), loss_l2=l2_Loss.item())
+            else:
+                inner.set_postfix(loss=g_loss.item(), loss_l2=l2_Loss.item(), adv_loss=adv_loss.item(),
+                                  vgg_loss=vgg_loss.item(), dloss=loss_disc.item())
+
+        # Keep track of generator loss and update progressbar
+        loss_avg_gen = loss_gen_epoch.item() / len(rd_loader_train)
+        loss_generator_train.append(loss_avg_gen)
+
+        # append average psnr loss
+        psnr_avg = psnr_epoch / len(rd_loader_train)
+        psnr_values.append(psnr_avg)
+
+        if phase == 0:
+            outer.set_postfix(loss=loss_avg_gen, psnr=psnr_avg)
+        else:
+            loss_disc_avg = loss_disc_epoch.item() / len(rd_loader_train)
+            loss_discriminator_train.append(loss_disc_avg)
+            outer.set_postfix(loss_gen=loss_avg_gen, loss_disc=loss_disc_avg, psnr=psnr_avg)
+    # Save generator model weights (for both phases)
+    torch.save(gen.state_dict(), 'weights/model_weights_gen_{}_{}.pth'.format(phase + 1, time.time()))
+    # Save Discriminator (only for phase 2)
+    if phase == 1:  
+        torch.save(disc.state_dict(), 'weights/model_weights_disc_{}_{}.pth'.format(phase + 1, time.time()))
 		
-		for each batch in dataset:
-            Prepare data
-            Reset parameter gradients
-
-            Forward pass generator to generate Super Resolution Image
-            Calculate GLoss = L1 Loss
-            Calculate L2 and PSNR loss training samples
-
-            if phase = 2:
-                Calculate p(HR) using forward pass discriminator
-                Calculate DLoss
-
-                Calculate P(SR) = 1 - p(HR) to compute ADVloss
-                Calculate VGG19_loss
-
-                Perform backward and optimizer step Discriminator
-
-                Add ADVloss and VGG19_Loss to GLoss => g_loss += alpha * VGG19_Loss + beta (ADVloss)
-
-       	Perform backward and optimizer step Generator
-       	Keep track of loss function
-       	
-Calculate PSNR on validation and test set (for generation of figure 3)
-Save weights of trained generator and discriminator
-
+        # Function to calculate the PSNR values
+        calculate_psnr(gen, rd_loader_valid_carbo, rd_loader_valid_coal, rd_loader_valid_sand, 							rd_loader_test_carbo, rd_loader_test_coal, rd_loader_test_sand, phase)  
 ```
 
 We chose to use `tqdm` to have more insight in the training procedure by giving an estimated time but also showing the current loss values for that batch or epoch. 
 
-```python
-from tqdm import tqdm
-
-inner = tqdm(total=len(loader), desc='Batch', position=1, leave=False)
-for i_batch, sample_batch in enumerate(loader):
-	# Perform forward, backpass etc
-	inner.update(1)
-	inner.inner.set_postfix(g_loss=g_loss.item(), loss_l2=l2_Loss.item())
-```
-
 It is important during phase 2 to detach the generated Super Resolution image otherwise it will be added to the computational graph of the Discriminator and be cleared when the backward pass is performed! The same holds for calculating p(SR) = 1 - p(HR) as p(SR) is used for the adversarial loss. 
+
+The PSNR values are calculated by looping through all separate data loader (6 in total) and adding their respective PSNR value to a dictionary (carbonate, coal, sandstone). The results are then saved in a JSON file. 
+
+### Recreating Figure 2 and 3
 
 
 
@@ -211,13 +305,9 @@ It is important during phase 2 to detach the generated Super Resolution image ot
 
 
 
+## Links
 
 
 
-
-
-
-
-
-
+## References
 
