@@ -210,8 +210,10 @@ for phase, epochs in enumerate([epochs_gen, epoch_both]):
             # If we are in the second training phase we also need to train discriminator
             if phase == 1:
                 # Create classification Tensors
-                label_real = torch.full((mini_batch_size, 1), real_label, dtype=torch.float32, device=device)
-                label_fake = torch.full((mini_batch_size, 1), fake_label, dtype=torch.float32, device=device)
+                label_real = torch.full((mini_batch_size, 1), real_label, 
+						dtype=torch.float32, device=device)
+                label_fake = torch.full((mini_batch_size, 1), fake_label, 
+						dtype=torch.float32, device=device)
 
                 # Training Super Resolution Images, training of SR and HR separate
                 output_disc_SR = disc(SR_image.detach())  # Output discriminator (prob HR image)
@@ -284,7 +286,8 @@ for phase, epochs in enumerate([epochs_gen, epoch_both]):
         torch.save(disc.state_dict(), 'weights/model_weights_disc_{}_{}.pth'.format(phase + 1, time.time()))
 		
         # Function to calculate the PSNR values
-        calculate_psnr(gen, rd_loader_valid_carbo, rd_loader_valid_coal, rd_loader_valid_sand, 							rd_loader_test_carbo, rd_loader_test_coal, rd_loader_test_sand, phase)  
+        calculate_psnr(gen, rd_loader_valid_carbo, rd_loader_valid_coal, rd_loader_valid_sand,
+	rd_loader_test_carbo, rd_loader_test_coal, rd_loader_test_sand, phase)  
 ```
 
 We chose to use `tqdm` to have more insight in the training procedure by giving an estimated time but also showing the current loss values for that batch or epoch. 
