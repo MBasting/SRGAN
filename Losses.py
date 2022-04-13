@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch
 from torchvision import transforms
 
+
 def DLoss(YLabel, OutputDiscrim):
     """
     Function that calculates the binary cross entropy loss according to eq. 5 of the paper.
@@ -13,6 +14,7 @@ def DLoss(YLabel, OutputDiscrim):
     lossFunc = nn.BCELoss(weight=None, size_average=None, reduce=None, reduction='mean')
     Dloss = lossFunc(OutputDiscrim, YLabel)
     return Dloss
+
 
 def L1loss(SR, HR):
     """
@@ -48,6 +50,7 @@ def PSNR(L2loss, I=2):
     psnr = 10 * math.log10(x)  # calculating the psnr as in eq. 3
     return psnr
 
+
 def ADVloss(PSR, device):
     """
     Function that calculates the adversarial loss term according to eq. 7 in the paper.
@@ -56,7 +59,7 @@ def ADVloss(PSR, device):
     note: p(SR) should not be 0 or 1 since the log function is undefined for these values.
     """
     lossFunc = nn.BCELoss(weight=None, size_average=None, reduce=None, reduction='mean')
-    ADVloss = lossFunc(PSR, torch.ones(PSR.size(), device=device))     # binary cross entropy function with y set to one.
+    ADVloss = lossFunc(PSR, torch.ones(PSR.size(), device=device))  # binary cross entropy function with y set to one.
     return ADVloss
 
 

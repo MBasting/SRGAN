@@ -1,10 +1,8 @@
 import json
 import random
-import sys
 import time
 
 import torch
-from torch.cuda.amp import autocast
 from torch.utils.data import DataLoader
 from torchvision.models import vgg19
 from tqdm import tqdm
@@ -13,8 +11,6 @@ from Discriminator import Discriminator
 from Load_dataset import load_dataset
 from Losses import DLoss, ADVloss, VGG19_Loss, L2loss, PSNR
 from SRCNN import SRCNN
-from torchsummary import summary
-
 
 
 def try_gpu():
@@ -96,7 +92,6 @@ def train(gen, disc, vgg, device, load_from_file=False, weights_path_gen=None, w
     alpha = 1e-5
     beta = 5e-3
 
-
     L1_loss = torch.nn.L1Loss(size_average=None, reduce=None, reduction='mean')
     criterion_disc = DLoss
 
@@ -136,22 +131,21 @@ def train(gen, disc, vgg, device, load_from_file=False, weights_path_gen=None, w
         # Each phase reinitialize optimizer
         optimizer_disc = torch.optim.Adam(disc.parameters(), lr_disc)
         optimizer_gen = torch.optim.Adam(gen.parameters(), lr_generator)
+
+        # Skip phase 1 if the load_from_file flag is activated and weight path of generator is available
         if phase == 0 and load_from_file and weights_path_gen is not None:
             print("SKIP Phase 1")
             continue
+        # Skip phase 2 if the load_from_file flag is activated and wieght path of discriminator is available
         if load_from_file and weights_path_disc is not None:
             print("SKIP Phase 2")
             continue
-        # When done with training phase 1 save the weights of the Generator
-        # But only save model when we are not loading the weights
-        if phase == 1 and weights_path_gen is None:
-            torch.save(gen.state_dict(), 'weights/model_weights_gen_{}.pth'.format(time.time()))
-            calculate_psnr(gen, rd_loader_valid_carbo, rd_loader_valid_coal, rd_loader_valid_sand, rd_loader_test_carbo,
-                           rd_loader_test_coal, rd_loader_test_sand, 0)
 
+        # TQDM allows us to keep track of the training
         outer = tqdm(range(epochs), position=0, desc='Epoch', leave=True)
         for epoch in outer:
 
+            # Initialize average loss values
             loss_gen_epoch = 0
             loss_disc_epoch = 0
             psnr_epoch = 0
@@ -159,24 +153,28 @@ def train(gen, disc, vgg, device, load_from_file=False, weights_path_gen=None, w
             # Specify Inner progressbar which keeps track of training inside epoch
             inner = tqdm(total=600, desc='Batch', position=1, leave=False)
 
+            # Loop through dataset with DataLoader
             for i_batch, sample_batch in enumerate(rd_loader_train):
 
+                # Specify generator and discriminator mode (other mode would be eval())
                 gen.train()
                 disc.train()
 
+                # Transfer image to GPU
                 input_LR = sample_batch["LR"].to(device)
                 target_HR = sample_batch["HR"].to(device)
 
                 # Zero the parameter gradients
                 optimizer_gen.zero_grad()
                 optimizer_disc.zero_grad()
+
                 # Generate Super Resolution Image
                 SR_image = gen(input_LR)
 
                 # Calculate loss
                 g_loss = L1_loss(SR_image, target_HR)
-
                 l2_Loss = L2loss(SR_image, target_HR)
+                # Calculate Training PSNR
                 psnr_single = PSNR(l2_Loss, 2)
 
                 # If we are in the second training phase we also need to train discriminator
@@ -211,7 +209,7 @@ def train(gen, disc, vgg, device, load_from_file=False, weights_path_gen=None, w
                     loss_disc_HR.backward()
                     optimizer_disc.step()
 
-                    loss_disc = (loss_disc_HR + loss_disc_SR) # / 2 The dloss should just be added see eq. 5
+                    loss_disc = (loss_disc_HR + loss_disc_SR)
                     # Keep track of the loss value
                     loss_disc_epoch += loss_disc
 
@@ -249,14 +247,15 @@ def train(gen, disc, vgg, device, load_from_file=False, weights_path_gen=None, w
                 loss_disc_avg = loss_disc_epoch.item() / len(rd_loader_train)
                 loss_discriminator_train.append(loss_disc_avg)
                 outer.set_postfix(loss_gen=loss_avg_gen, loss_disc=loss_disc_avg, psnr=psnr_avg)
+        # Save generator model weights (for both phases)
+        torch.save(gen.state_dict(), 'weights/model_weights_gen_{}_{}.pth'.format(phase + 1, time.time()))
+        # Save Discriminator (only for phase 2)
+        if phase == 1:
+            torch.save(disc.state_dict(), 'weights/model_weights_disc_{}_{}.pth'.format(phase + 1, time.time()))
 
-    calculate_psnr(gen, rd_loader_valid_carbo, rd_loader_valid_coal, rd_loader_valid_sand, rd_loader_test_carbo,
-                   rd_loader_test_coal, rd_loader_test_sand, 1)
-
-    # Save the Model weights of both Generator and Discriminator
-    time_done = time.time()
-    torch.save(gen.state_dict(), 'weights/model_weights_gen_2_{}.pth'.format(time_done))
-    torch.save(disc.state_dict(), 'weights/model_weights_disc_2_{}.pth'.format(time_done))
+            # Function to calculate the PSNR values
+            calculate_psnr(gen, rd_loader_valid_carbo, rd_loader_valid_coal, rd_loader_valid_sand, rd_loader_test_carbo,
+                           rd_loader_test_coal, rd_loader_test_sand, phase)
 
 
 if __name__ == '__main__':
@@ -276,6 +275,8 @@ if __name__ == '__main__':
     vgg_cut.to(device)
 
     # Comment out if you want to only train from phase 2
-    # train(gen, disc, vgg_cut, device, True, "weights/model_weights_gen.pth", None)
+    # train(gen, disc, vgg_cut, device, True, "weights/model_weights_gen_1648653725.3494701.pth", None)
 
-    train(gen, disc, vgg_cut, device, label_smoothing=False)
+    train(gen, disc, vgg_cut, device)
+
+

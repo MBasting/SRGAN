@@ -16,6 +16,7 @@ class DiscriminatorBlock(nn.Module):
         x = self.lrelu(x)
         return x
 
+
 class Discriminator(nn.Module):
 
     def __init__(self, in_channels, hidden_channels=None, stride=None, kernel_size=3, alpha=0.2):
@@ -29,28 +30,28 @@ class Discriminator(nn.Module):
         self.conv1 = nn.Conv2d(in_channels, hidden_channels[0], kernel_size, stride[0])
         self.lrelu = nn.LeakyReLU(alpha)
 
-        self.disc_blocks = nn.ModuleList([DiscriminatorBlock(hidden_channels[i-1], hidden_channels[i], kernel_size, stride[i]) for i in range(1, len(hidden_channels))])
+        self.disc_blocks = nn.ModuleList(
+            [DiscriminatorBlock(hidden_channels[i - 1], hidden_channels[i], kernel_size, stride[i]) for i in
+             range(1, len(hidden_channels))])
 
         self.flatten = nn.Flatten()
-        # TODO: verify Input size (9x9x512)
         self.fc1 = nn.Linear(41472, 1024)
 
         self.fc2 = nn.Linear(1024, 1)
 
         self.sigmoid = nn.Sigmoid()
 
-
-
     def forward(self, x):
+        """
+        Forward pass
+        :param x: Input
+        :return: Output of forward pass
+        """
         x = self.lrelu(self.conv1(x))
-
+        # Loop through all discriminator blocks
         for layer in self.disc_blocks:
             x = layer(x)
         x = self.flatten(x)
         x = self.lrelu(self.fc1(x))
         pred = self.sigmoid(self.fc2(x))
         return pred
-
-
-
-

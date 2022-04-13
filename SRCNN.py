@@ -74,7 +74,6 @@ class UpscaleLayer(nn.Module):
 
 class SRCNN(nn.Module):
     """
-    ## TODO: LINK TO PAPER
     SRCNN implementation
     """
 
