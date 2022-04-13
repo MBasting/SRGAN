@@ -33,10 +33,10 @@ coal_psnr = {"bicubic": [], "SRCNN": [], "SRGAN": []}
 psnr_dict_SRCNN = {}
 psnr_dict_SRGAN = {}
 # Opening JSON file
-with open('results/psnr_0_1648653745.4349494.json') as json_file:
+with open('results/psnr_0_1648742813.0668075.json') as json_file:
     psnr_dict_SRCNN = json.load(json_file)
 
-with open('results/psnr_1_1648672542.2082596.json') as json_file:
+with open('results/psnr_1_1648763675.3855865.json') as json_file:
     psnr_dict_SRGAN = json.load(json_file)
 
 sandstone_psnr["SRCNN"] = psnr_dict_SRCNN["sandstone"]

@@ -275,7 +275,7 @@ if __name__ == '__main__':
     vgg_cut.to(device)
 
     # Comment out if you want to only train from phase 2
-    # train(gen, disc, vgg_cut, device, True, "weights/model_weights_gen_1648653725.3494701.pth", None)
+    # train(gen, disc, vgg_cut, device, True, "weights/model_weights_gen_1648742795.0276928.pth", None)
 
     train(gen, disc, vgg_cut, device)
 

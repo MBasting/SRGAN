@@ -19,8 +19,8 @@ coal_4_valid = RockDataset("DeepRockSR-2D/coal2D/coal2D_valid_LR_default_X4", "D
 gen_1 = SRCNN(1)
 gen_2 = SRCNN(1)
 
-load_weights(gen_1, None, "weights/model_weights_gen_1648653725.3494701.pth", None)
-load_weights(gen_2, None, "weights/model_weights_gen_2_1648672542.2112496.pth", None)
+load_weights(gen_1, None, "weights/model_weights_gen_1648742795.0276928.pth", None)
+load_weights(gen_2, None, "weights/model_weights_gen_2_1648763675.3885765.pth", None)
 gen_1.eval()
 gen_2.eval()
 
