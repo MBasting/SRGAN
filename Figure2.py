@@ -24,7 +24,7 @@ load_weights(gen_2, None, "weights/model_weights_gen_2_1648763675.3885765.pth", 
 gen_1.eval()
 gen_2.eval()
 
-valid_dict = {"sandstone": sandstone_4_valid, "carbonate": carbonate_4_valid, "coal": coal_4_valid}
+valid_dict = {"sandstone": sandstone_4_valid, "coal": coal_4_valid, "carbonate": carbonate_4_valid, }
 
 fig0, axs0 = plt.subplots(1, 3, figsize=(5, 3))
 fig, axs = plt.subplots(3, 5, figsize=(10, 5))
