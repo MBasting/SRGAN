@@ -345,11 +345,3 @@ Another possible explanation for the insignificant difference in sharpness of th
 
 In figure 3 of the reimplemented model the PSNR value for the SRCNN and the SRGAN are about equal. While in figure 3 of the paper the PSNR of the SRCNN is higher than that of the SRGAN. This discrepancy is also thought to be caused by the mode collapse of the discriminator. Due to the mode collapse the generator is not trained well anymore and thus does not change its behavior, which explains the PSNR of the SRCNN and the SRGAN being equal. 
 
-
-
-## Links
-
-
-
-## References
-
