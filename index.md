@@ -301,7 +301,19 @@ It is important during phase 2 to detach the generated Super Resolution image ot
 The PSNR values are calculated by looping through all separate data loader (6 in total) and adding their respective PSNR value to a dictionary (carbonate, coal, sandstone). The results are then saved in a JSON file. 
 
 ### Recreating Figure 2 and 3
-
+The models were used to reproduce Figure 2 and 3 from the paper. The figures were mainly reproduced through attentively looking at how they were composed and recreating this. It was additionally necessary to perform bicubic interpolation on images from the validation and test set. For this we employed the Upscale function from Torch: 
+```
+def bicubic_interpolation(image_LR, scale_factor):
+   """
+   Creates a bicupic interpolated image
+  
+   Output image depends on scale factor (2x or 4x)
+   """
+   up = nn.Upsample(scale_factor=scale_factor, mode='bicubic')
+   upscale_image_LR = up(image_LR).view(1, image_LR.shape[2]*4, image_LR.shape[3]*4)
+  
+   return upscale_image_LR
+```
 
 
 ## Results
@@ -330,7 +342,7 @@ Figure 3 from paper:
 
 In the reproduction of this figure we can see that the PSNR values for SRCNN and SRGAN are similar, which is expected from the result in Figure 2. Also, all the PSNR values are higher compared to the values in the paper. 
 
-<img align= center src="results4.png" alt="results4" style="width:90%;" />
+<img align= center src="results5.png" alt="results5" style="width:90%;" />
 
 ## Discussion
 At the github([https://github.com/yingDaWang-UNSW/EDSRGAN-3D](https://github.com/yingDaWang-UNSW/EDSRGAN-3D)) page of the paper the authors provide the code for the EDSRGAN model as well as a manual for the installation and training of it. The manual was followed, but the model was not able to run. This could be caused by backward compatibility issues of the libraries used in the model. Due to the cluttered code and the limited time available it was decided that running the model of the authors would not be pursued.
