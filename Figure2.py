@@ -26,6 +26,7 @@ gen_2.eval()
 
 valid_dict = {"sandstone": sandstone_4_valid, "carbonate": carbonate_4_valid, "coal": coal_4_valid}
 
+fig0, axs0 = plt.subplots(1, 3, figsize=(5, 3))
 fig, axs = plt.subplots(3, 5, figsize=(10, 5))
 fig2, axs2 = plt.subplots(3, 3, figsize=(10, 9))
 cm1 = "Greys_r"
@@ -39,13 +40,30 @@ for index, key in enumerate(valid_dict):
     else:
         sample_batch = sandstone_4_valid[1153]
 
+
     # Loading of images
     image_LR = sample_batch["LR"][0]
     image_HR = sample_batch["HR"]
+
+    axs0[index].imshow(toPil(image_HR), cmap=cm1)
+    axs0[index].set_title(key)
+
+    if key == "carbonate":
+        image_LR = image_LR[0:60, 0:60]
+        image_HR = image_HR[:, 0:240, 0:240]
+
+    if key == "coal":
+        image_LR = image_LR[31:91, 31:91]
+        image_HR = image_HR[:, 125:365, 125:365]
+
+    if key =="sandstone":
+        image_LR = image_LR[31:91, 31:91]
+        image_HR = image_HR[:, 125:365, 125:365]
+
+    print(image_LR.size())
+    # Generate SRCNN and SRGAN images and map to batch representation
     image_LR_2 = image_LR.view(1, 1, image_LR.shape[0], image_LR.shape[1]) # Map to Batch representation
     image_SR_bicupic = bicubic_interpolation(image_LR_2, 4)
-
-    # Generate SRCNN and SRGAN images and map to batch representation
     image_SR_SRCNN = gen_1(image_LR_2).detach().view(1, image_HR.size()[-1], image_HR.size()[-1])
     image_SR_SRGAN = gen_2(image_LR_2).detach().view(1, image_HR.size()[-1], image_HR.size()[-1])
 
@@ -63,14 +81,14 @@ for index, key in enumerate(valid_dict):
         axs[0, 3].set_title("SRCNN")
         axs[0, 4].set_title("SRGAN")
 
-    sp = axs2[index, 0].imshow(abs((image_SR_bicupic - image_HR).view(500, 500)) * 255, cmap=cm)
+    sp = axs2[index, 0].imshow(abs((image_SR_bicupic - image_HR).view(240, 240)) * 255, cmap=cm)
     axs2[index, 0].set_title("BC minus HR")
     axs2[index, 0].set(ylabel=key)
     fig2.colorbar(sp, ax=axs2[index, 0])
-    sp = axs2[index, 1].imshow(abs((image_SR_SRCNN - image_HR).view(500, 500)) * 255, cmap=cm)
+    sp = axs2[index, 1].imshow(abs((image_SR_SRCNN - image_HR).view(240, 240)) * 255, cmap=cm)
     axs2[index, 1].set_title("CNN minus HR")
     fig2.colorbar(sp, ax=axs2[index, 1])
-    sp = axs2[index, 2].imshow(abs((image_SR_SRGAN - image_HR).view(500, 500)) * 255, cmap=cm)
+    sp = axs2[index, 2].imshow(abs((image_SR_SRGAN - image_HR).view(240, 240)) * 255, cmap=cm)
     axs2[index, 2].set_title("SRGAN minus HR")
     fig2.colorbar(sp, ax=axs2[index, 2])
 

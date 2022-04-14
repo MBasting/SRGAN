@@ -35,9 +35,9 @@ def load_weights(gen, disc, gen_weight_path, disc_weight_path):
     :return:
     """
     if gen_weight_path is not None:
-        gen.load_state_dict(torch.load(gen_weight_path))
+        gen.load_state_dict(torch.load(gen_weight_path)) # add: map_location='cpu' if you're working from a macbook
     if disc_weight_path is not None:
-        disc.load_state_dict(torch.load(disc_weight_path))
+        disc.load_state_dict(torch.load(disc_weight_path)) # add: map_location='cpu' if you're working from a macbook
 
 
 def calculate_psnr(gen, rd_loader_valid_carbo, rd_loader_valid_coal, rd_loader_valid_sand, rock_s_4_test_carbonate,
