@@ -302,7 +302,7 @@ The PSNR values are calculated by looping through all separate data loader (6 in
 
 ### Recreating Figure 2 and 3
 The models were used to reproduce Figure 2 and 3 from the paper. The figures were mainly reproduced through attentively looking at how they were composed and recreating this. It was additionally necessary to perform bicubic interpolation on images from the validation and test set. For this we employed the Upscale function from Torch: 
-```
+```python
 def bicubic_interpolation(image_LR, scale_factor):
    """
    Creates a bicupic interpolated image
