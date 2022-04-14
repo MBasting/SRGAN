@@ -331,8 +331,6 @@ In the final part of the figure, the high resolution image is subtracted from th
 
 <img align= center src="results3.png" alt="results3" style="width:90%;" />
 
-FIGURE 3 
-
 In Figure 3 of the paper the Pixel-to-Noise Ratio (PSNR) values are depicted for each technique. Here we show the original picture. The ratio is aimed to be as high as possible. Below the results are shown produced with our models. We did not incorporate the results from the external datasets (Bentheimer and Ketton Carbonate) because we were at last not able to. 
 
 The PSNR ratio decreases in the paper for SRGAN compared to SRCNN. It is expected to increase, because a higher resolution image is supposed to show more signal opposed to noise. In the paper the PSNR value is thus argued because the value will become lower when there is not a pixel wise match (between the produced image and the ground truth image), but visually the output may have improved. 
